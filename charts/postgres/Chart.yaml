@@ -1,0 +1,6 @@
+apiVersion: v2
+name: postgres
+description: Local stand-in for RDS, used only on kind
+type: application
+version: 0.1.0
+appVersion: "17"

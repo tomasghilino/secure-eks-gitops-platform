@@ -1,17 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: api
-  namespace: local
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "api.labels" . | nindent 4 }}
 spec:
-  replicas: 2
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: api
+      {{- include "api.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: api
+        {{- include "api.labels" . | nindent 8 }}
     spec:
       securityContext:
         runAsNonRoot: true
@@ -19,16 +20,13 @@ spec:
           type: RuntimeDefault
       containers:
         - name: api
-          image: segp-api:local
-          imagePullPolicy: IfNotPresent
+          image: {{ include "api.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
               containerPort: 3000
-          envFrom:
-            - configMapRef:
-                name: api-config
-            - secretRef:
-                name: db-credentials
+          env:
+            {{- include "api.env" . | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /health/ready
@@ -42,26 +40,9 @@ spec:
             periodSeconds: 10
             failureThreshold: 3
           resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              memory: 256Mi
+            {{- toYaml .Values.resources | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: api
-  namespace: local
-spec:
-  selector:
-    app.kubernetes.io/name: api
-  ports:
-    - name: http
-      port: 80
-      targetPort: http
