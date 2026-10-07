@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # trivy releases were hijacked in march 2026, so this digest was pinned only after cosign verified
+  # it was signed by the aquasecurity/trivy release workflow
+  TRIVY_IMAGE: ghcr.io/aquasecurity/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -64,12 +69,39 @@ jobs:
           semgrep/semgrep:1.179.0@sha256:93963d9295a366f59e4850127b1550400ee7b388f04fe144e4a1f6325d96e01b
           semgrep scan --config p/default --config p/github-actions --metrics=off --error
 
-  image:
-    needs: [test, secrets, sast]
+  deps:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: docker build -t "segp-api:${GITHUB_SHA}" app
+      - name: trivy dependencies
+        run: >-
+          docker run --rm -v "$PWD:/work" -w /work "$TRIVY_IMAGE"
+          fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+          --table-mode detailed app
+
+  image:
+    needs: [test, secrets, sast, deps]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      IMAGE: segp-api:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: docker build -t "$IMAGE" app
+      - run: docker save -o image.tar "$IMAGE"
+      - name: trivy image vulnerabilities
+        run: >-
+          docker run --rm -v "$PWD:/work" -w /work -v "$RUNNER_TEMP/trivy:/cache" "$TRIVY_IMAGE"
+          image --cache-dir /cache --input image.tar
+          --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+          --table-mode detailed
+      - name: trivy image secrets
+        run: >-
+          docker run --rm -v "$PWD:/work" -w /work -v "$RUNNER_TEMP/trivy:/cache" "$TRIVY_IMAGE"
+          image --cache-dir /cache --input image.tar
+          --scanners secret --exit-code 1 --table-mode detailed
