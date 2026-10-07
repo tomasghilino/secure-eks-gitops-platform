@@ -105,3 +105,14 @@ jobs:
           docker run --rm -v "$PWD:/work" -w /work -v "$RUNNER_TEMP/trivy:/cache" "$TRIVY_IMAGE"
           image --cache-dir /cache --input image.tar
           --scanners secret --exit-code 1 --table-mode detailed
+      - name: sbom
+        run: >-
+          docker run --rm -v "$PWD:/work" -w /work -v "$RUNNER_TEMP/trivy:/cache" "$TRIVY_IMAGE"
+          image --cache-dir /cache --input image.tar
+          --format cyclonedx --output sbom.cdx.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 30
