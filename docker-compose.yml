@@ -1,0 +1,66 @@
+name: secure-eks-gitops-platform
+
+x-app: &app
+  build: ./app
+  image: segp-api:local
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+x-db-env: &db-env
+  PGHOST: db
+  PGPORT: "5432"
+  PGDATABASE: ${PGDATABASE:?copy .env.example to .env}
+  PGUSER: ${PGUSER:?copy .env.example to .env}
+  PGPASSWORD: ${PGPASSWORD:?copy .env.example to .env}
+
+services:
+  db:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_DB: ${PGDATABASE:?copy .env.example to .env}
+      POSTGRES_USER: ${PGUSER:?copy .env.example to .env}
+      POSTGRES_PASSWORD: ${PGPASSWORD:?copy .env.example to .env}
+    ports:
+      - "127.0.0.1:${PGPORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  migrate:
+    <<: *app
+    command: ["node_modules/node-pg-migrate/bin/node-pg-migrate.js", "up"]
+    environment: *db-env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    environment: *db-env
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - /nodejs/bin/node
+        - -e
+        - "fetch('http://127.0.0.1:3000/health').then((res) => process.exit(res.ok ? 0 : 1), () => process.exit(1))"
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    stop_grace_period: 10s
+
+volumes:
+  db-data:
