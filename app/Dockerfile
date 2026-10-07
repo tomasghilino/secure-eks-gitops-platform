@@ -20,5 +20,6 @@ COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
 COPY migrations ./migrations
+USER 65532:65532
 EXPOSE 3000
 CMD ["dist/main.js"]
