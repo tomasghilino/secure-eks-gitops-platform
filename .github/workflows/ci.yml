@@ -82,8 +82,36 @@ jobs:
           fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
           --table-mode detailed app
 
+  charts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      HELM_VERSION: v4.3.0
+      HELM_SHA256: 86584a54def73570558f66f5111cc53dfed56689637ae32c1201205d494f54fb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: install helm
+        run: |
+          curl -fsSLo helm.tar.gz "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz"
+          echo "${HELM_SHA256}  helm.tar.gz" | sha256sum --check
+          tar -xzf helm.tar.gz linux-amd64/helm
+          sudo mv linux-amd64/helm /usr/local/bin/helm
+      - run: helm lint charts/api --set image.tag=ci
+      - run: helm lint charts/postgres
+      - name: render charts
+        run: |
+          mkdir rendered
+          helm template api charts/api --set image.tag=ci > rendered/api.yaml
+          helm template postgres charts/postgres > rendered/postgres.yaml
+      - name: trivy config
+        run: >-
+          docker run --rm -v "$PWD:/work" -w /work "$TRIVY_IMAGE"
+          config --severity HIGH,CRITICAL --exit-code 1 --table-mode detailed rendered
+
   image:
-    needs: [test, secrets, sast, deps]
+    needs: [test, secrets, sast, deps, charts]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
