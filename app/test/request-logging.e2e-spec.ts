@@ -10,6 +10,7 @@ describe('Request logging (e2e)', () => {
   let app: INestApplication<App>;
   const log = vi.spyOn(Logger.prototype, 'log');
   const warn = vi.spyOn(Logger.prototype, 'warn');
+  const error = vi.spyOn(Logger.prototype, 'error');
 
   beforeAll(async () => {
     const moduleFixture = await Test.createTestingModule({
@@ -45,6 +46,14 @@ describe('Request logging (e2e)', () => {
 
     expect(log).not.toHaveBeenCalledWith(
       expect.objectContaining({ path: '/health' }),
+    );
+  });
+
+  it('does not log kubernetes readiness probes, even failing ones', async () => {
+    await request(app.getHttpServer()).get('/health/ready').expect(503);
+
+    expect(error).not.toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/health/ready' }),
     );
   });
 });
