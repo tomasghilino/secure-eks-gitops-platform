@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  namespace: local
+data:
+  PGHOST: postgres
+  PGPORT: "5432"
+  PGDATABASE: api
