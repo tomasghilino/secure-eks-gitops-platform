@@ -1,4 +1,8 @@
-import { createUserSchema, userIdSchema } from './users.schemas.js';
+import {
+  createUserSchema,
+  listUsersQuerySchema,
+  userIdSchema,
+} from './users.schemas.js';
 
 describe('createUserSchema', () => {
   it('accepts a valid user and trims the name', () => {
@@ -47,5 +51,28 @@ describe('userIdSchema', () => {
 
   it('rejects a non uuid value', () => {
     expect(userIdSchema.safeParse('1').success).toBe(false);
+  });
+});
+
+describe('listUsersQuerySchema', () => {
+  it('defaults to the first 50 users', () => {
+    expect(listUsersQuerySchema.parse({})).toEqual({ limit: 50, offset: 0 });
+  });
+
+  it('reads limit and offset from query strings', () => {
+    expect(listUsersQuerySchema.parse({ limit: '10', offset: '20' })).toEqual({
+      limit: 10,
+      offset: 20,
+    });
+  });
+
+  it.each(['0', '101', '1.5', 'abc'])('rejects limit %s', (limit) => {
+    expect(listUsersQuerySchema.safeParse({ limit }).success).toBe(false);
+  });
+
+  it('rejects a negative offset', () => {
+    expect(listUsersQuerySchema.safeParse({ offset: '-1' }).success).toBe(
+      false,
+    );
   });
 });

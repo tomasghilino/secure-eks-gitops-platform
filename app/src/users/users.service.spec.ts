@@ -11,7 +11,7 @@ const user: User = {
 
 describe('UsersService', () => {
   const repository = {
-    findAll: vi.fn(),
+    list: vi.fn(),
     findById: vi.fn(),
     create: vi.fn(),
     delete: vi.fn(),
@@ -22,9 +22,12 @@ describe('UsersService', () => {
     vi.resetAllMocks();
   });
 
-  it('returns all users', async () => {
-    repository.findAll.mockResolvedValue([user]);
-    await expect(service.findAll()).resolves.toEqual([user]);
+  it('returns one page of users', async () => {
+    repository.list.mockResolvedValue([user]);
+    await expect(service.list({ limit: 10, offset: 20 })).resolves.toEqual([
+      user,
+    ]);
+    expect(repository.list).toHaveBeenCalledWith({ limit: 10, offset: 20 });
   });
 
   it('returns a user by id', async () => {

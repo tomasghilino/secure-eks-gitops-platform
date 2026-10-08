@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Pool } from 'pg';
 import { PG_POOL } from '../database/database.module.js';
-import type { CreateUserInput } from './users.schemas.js';
+import type { CreateUserInput, ListUsersQuery } from './users.schemas.js';
 
 export interface User {
   id: string;
@@ -14,9 +14,10 @@ export interface User {
 export class UsersRepository {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
 
-  async findAll(): Promise<User[]> {
+  async list({ limit, offset }: ListUsersQuery): Promise<User[]> {
     const { rows } = await this.pool.query<User>(
-      'SELECT id, name, email, created_at AS "createdAt" FROM users ORDER BY created_at',
+      'SELECT id, name, email, created_at AS "createdAt" FROM users ORDER BY created_at, id LIMIT $1 OFFSET $2',
+      [limit, offset],
     );
     return rows;
   }

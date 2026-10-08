@@ -72,6 +72,35 @@ describe('Users (e2e)', () => {
     ]);
   });
 
+  it('returns at most 50 users by default', async () => {
+    await pool.query(
+      "INSERT INTO users (name, email) SELECT 'user ' || n, 'user' || n || '@example.com' FROM generate_series(1, 51) AS n",
+    );
+
+    const list = await api().get('/users').expect(200);
+
+    expect(list.body).toHaveLength(50);
+  });
+
+  it('pages through users with limit and offset', async () => {
+    for (const name of ['Ada', 'Grace', 'Linus']) {
+      await api()
+        .post('/users')
+        .send({ name, email: `${name.toLowerCase()}@example.com` })
+        .expect(201);
+    }
+
+    const page = await api().get('/users?limit=1&offset=1').expect(200);
+
+    expect(page.body.map((user: { name: string }) => user.name)).toEqual([
+      'Grace',
+    ]);
+  });
+
+  it('rejects a page size above 100', async () => {
+    await api().get('/users?limit=101').expect(400);
+  });
+
   it('rejects a duplicate email regardless of case', async () => {
     await api()
       .post('/users')

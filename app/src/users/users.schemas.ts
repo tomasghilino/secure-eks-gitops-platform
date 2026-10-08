@@ -8,3 +8,10 @@ export const createUserSchema = z.strictObject({
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 
 export const userIdSchema = z.uuid();
+
+export const listUsersQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>;

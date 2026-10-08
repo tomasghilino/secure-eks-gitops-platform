@@ -7,12 +7,15 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
 import type { User } from './users.repository.js';
 import {
   createUserSchema,
+  listUsersQuerySchema,
   userIdSchema,
   type CreateUserInput,
+  type ListUsersQuery,
 } from './users.schemas.js';
 import { UsersService } from './users.service.js';
 
@@ -21,8 +24,10 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  findAll(): Promise<User[]> {
-    return this.usersService.findAll();
+  list(
+    @Query({ schema: listUsersQuerySchema }) query: ListUsersQuery,
+  ): Promise<User[]> {
+    return this.usersService.list(query);
   }
 
   @Get(':id')

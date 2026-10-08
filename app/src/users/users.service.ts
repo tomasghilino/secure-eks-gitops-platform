@@ -4,14 +4,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { type User, UsersRepository } from './users.repository.js';
-import type { CreateUserInput } from './users.schemas.js';
+import type { CreateUserInput, ListUsersQuery } from './users.schemas.js';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly users: UsersRepository) {}
 
-  findAll(): Promise<User[]> {
-    return this.users.findAll();
+  list(query: ListUsersQuery): Promise<User[]> {
+    return this.users.list(query);
   }
 
   async findById(id: string): Promise<User> {
