@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: segp
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: Workloads of the secure EKS GitOps platform
+  sourceRepos:
+    - git@github.com:tomasghilino/secure-eks-gitops-platform.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: staging
+    - server: https://kubernetes.default.svc
+      namespace: production
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: apps
+      kind: Deployment
+    - group: apps
+      kind: StatefulSet
+    - group: ""
+      kind: Service
+    - group: batch
+      kind: Job

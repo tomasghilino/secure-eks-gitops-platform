@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: api-staging
+  namespace: argocd
+spec:
+  project: segp
+  source:
+    repoURL: git@github.com:tomasghilino/secure-eks-gitops-platform.git
+    targetRevision: dev
+    path: charts/api
+    helm:
+      releaseName: api
+      valueFiles:
+        - ../../environments/staging/api.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    # the migration hook fails until postgres is ready, so a fresh environment needs a few attempts
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
