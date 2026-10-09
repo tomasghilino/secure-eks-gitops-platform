@@ -11,6 +11,8 @@ spec:
     path: charts/baseline
     helm:
       releaseName: baseline
+      valueFiles:
+        - ../../environments/staging/baseline.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: staging
