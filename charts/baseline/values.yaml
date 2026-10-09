@@ -6,4 +6,4 @@ viewerGroups: []
 
 kyverno:
   # Audit only records violations in policy reports; Deny rejects them
-  action: Audit
+  action: Deny
