@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: baseline-production
+  namespace: argocd
+spec:
+  project: baseline
+  source:
+    repoURL: git@github.com:tomasghilino/secure-eks-gitops-platform.git
+    targetRevision: dev
+    path: charts/baseline
+    helm:
+      releaseName: baseline
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: production
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -20,8 +20,6 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
     # the migration hook fails until postgres is ready, so a fresh environment needs a few attempts
     retry:
       limit: 5

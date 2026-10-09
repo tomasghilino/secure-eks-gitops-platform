@@ -1,0 +1,2 @@
+# pinned so a cluster upgrade can't tighten the rules by surprise; warn and audit use latest to show what is coming
+podSecurityVersion: v1.35

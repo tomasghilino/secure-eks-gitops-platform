@@ -103,12 +103,15 @@ jobs:
           helm lint charts/api --values environments/staging/api.yaml
           helm lint charts/api --values environments/production/api.yaml
           helm lint charts/postgres
+          helm lint charts/baseline --namespace staging
       - name: render charts
         run: |
           mkdir rendered
           helm template api charts/api --values environments/staging/api.yaml > rendered/api-staging.yaml
           helm template api charts/api --values environments/production/api.yaml > rendered/api-production.yaml
           helm template postgres charts/postgres > rendered/postgres.yaml
+          helm template baseline charts/baseline --namespace staging > rendered/baseline-staging.yaml
+          helm template baseline charts/baseline --namespace production > rendered/baseline-production.yaml
       - name: trivy config
         run: >-
           docker run --rm -v "$PWD:/work" -w /work "$TRIVY_IMAGE"

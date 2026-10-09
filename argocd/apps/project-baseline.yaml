@@ -1,12 +1,12 @@
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
-  name: segp
+  name: baseline
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
 spec:
-  description: Workloads of the secure EKS GitOps platform
+  description: Namespace guardrails owned by the platform, kept apart so app charts can't grant themselves access
   sourceRepos:
     - git@github.com:tomasghilino/secure-eks-gitops-platform.git
   destinations:
@@ -18,11 +18,7 @@ spec:
     - group: ""
       kind: Namespace
   namespaceResourceWhitelist:
-    - group: apps
-      kind: Deployment
-    - group: apps
-      kind: StatefulSet
-    - group: ""
-      kind: Service
-    - group: batch
-      kind: Job
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding
