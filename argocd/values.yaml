@@ -1,4 +1,4 @@
-# helm install argocd argo/argo-cd --version 10.9.7 --namespace argocd --create-namespace --values argocd/values.yaml
+# installed by scripts/kind-up.sh, which pins the chart version
 global:
   image:
     # digest pinned after cosign verified it was signed by the argoproj/argo-cd release workflow
