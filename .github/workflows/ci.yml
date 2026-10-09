@@ -98,12 +98,16 @@ jobs:
           echo "${HELM_SHA256}  helm.tar.gz" | sha256sum --check
           tar -xzf helm.tar.gz linux-amd64/helm
           sudo mv linux-amd64/helm /usr/local/bin/helm
-      - run: helm lint charts/api --set image.tag=ci
-      - run: helm lint charts/postgres
+      - name: lint charts
+        run: |
+          helm lint charts/api --values environments/staging/api.yaml
+          helm lint charts/api --values environments/production/api.yaml
+          helm lint charts/postgres
       - name: render charts
         run: |
           mkdir rendered
-          helm template api charts/api --set image.tag=ci > rendered/api.yaml
+          helm template api charts/api --values environments/staging/api.yaml > rendered/api-staging.yaml
+          helm template api charts/api --values environments/production/api.yaml > rendered/api-production.yaml
           helm template postgres charts/postgres > rendered/postgres.yaml
       - name: trivy config
         run: >-
