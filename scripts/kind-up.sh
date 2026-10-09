@@ -5,6 +5,7 @@ set -euo pipefail
 
 CLUSTER=segp
 ARGOCD_CHART_VERSION=10.9.7
+KYVERNO_CHART_VERSION=3.9.1
 REPO_URL=git@github.com:tomasghilino/secure-eks-gitops-platform.git
 DEPLOY_KEY_FILE=${DEPLOY_KEY_FILE:-$HOME/.ssh/segp-argocd}
 
@@ -45,6 +46,11 @@ if ! kubectl get secret repo-segp --namespace argocd >/dev/null 2>&1; then
     --from-file=sshPrivateKey="$DEPLOY_KEY_FILE"
   kubectl label secret repo-segp --namespace argocd argocd.argoproj.io/secret-type=repository
 fi
+
+echo "==> kyverno"
+helm repo add kyverno https://kyverno.github.io/kyverno --force-update
+helm upgrade --install kyverno kyverno/kyverno --version "$KYVERNO_CHART_VERSION" \
+  --namespace kyverno --create-namespace --values kyverno/values.yaml --wait --timeout 10m
 
 echo "==> environments"
 for env in staging production; do
