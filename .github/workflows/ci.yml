@@ -117,6 +117,15 @@ jobs:
         run: >-
           docker run --rm -v "$PWD:/work" -w /work "$TRIVY_IMAGE"
           config --severity HIGH,CRITICAL --exit-code 1 --table-mode detailed rendered
+      # the same policies the cluster enforces, so a violation fails here instead of at deploy time
+      # one run per environment: the cli panics when two inputs hold objects with the same name
+      - name: kyverno policies
+        env:
+          KYVERNO_CLI: reg.kyverno.io/kyverno/kyverno-cli:v1.19.1@sha256:ced7b2be0b04250cabfe695f15307f69eb715fe23234816388af4f3812915b2a
+        run: |
+          helm template baseline charts/baseline --namespace staging --show-only templates/kyverno-policies.yaml > rendered/kyverno-policies.yaml
+          docker run --rm -v "$PWD:/work" -w /work "$KYVERNO_CLI" apply rendered/kyverno-policies.yaml --resource rendered/api-staging.yaml --resource rendered/postgres.yaml
+          docker run --rm -v "$PWD:/work" -w /work "$KYVERNO_CLI" apply rendered/kyverno-policies.yaml --resource rendered/api-production.yaml --resource rendered/postgres.yaml
 
   image:
     needs: [test, secrets, sast, deps, charts]
