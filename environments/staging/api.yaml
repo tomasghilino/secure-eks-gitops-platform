@@ -2,6 +2,3 @@ replicaCount: 1
 
 image:
   tag: "dc0fcd7"
-
-database:
-  name: segp
