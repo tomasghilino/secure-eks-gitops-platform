@@ -18,6 +18,8 @@ spec:
     - group: ""
       kind: Namespace
   namespaceResourceWhitelist:
+    - group: ""
+      kind: ServiceAccount
     - group: networking.k8s.io
       kind: NetworkPolicy
     - group: rbac.authorization.k8s.io
