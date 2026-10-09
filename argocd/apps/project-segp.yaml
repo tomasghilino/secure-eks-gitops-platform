@@ -25,3 +25,5 @@ spec:
       kind: ServiceAccount
     - group: batch
       kind: Job
+    - group: networking.k8s.io
+      kind: NetworkPolicy

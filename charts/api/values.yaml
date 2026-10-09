@@ -10,6 +10,11 @@ database:
   port: 5432
   name: api
   credentialsSecret: db-credentials
+  # where the api may connect on the database port; on EKS this becomes the RDS subnets
+  networkPeers:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgres
 
 service:
   port: 80

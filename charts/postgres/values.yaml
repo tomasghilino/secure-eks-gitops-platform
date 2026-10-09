@@ -11,3 +11,12 @@ resources:
     memory: 256Mi
   limits:
     memory: 512Mi
+
+# the only pods allowed to connect on the database port
+allowedClients:
+  - podSelector:
+      matchLabels:
+        app.kubernetes.io/name: api
+  - podSelector:
+      matchLabels:
+        app.kubernetes.io/name: api-migrate
