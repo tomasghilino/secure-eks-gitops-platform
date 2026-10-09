@@ -24,3 +24,5 @@ spec:
       kind: NetworkPolicy
     - group: rbac.authorization.k8s.io
       kind: RoleBinding
+    - group: policies.kyverno.io
+      kind: NamespacedValidatingPolicy

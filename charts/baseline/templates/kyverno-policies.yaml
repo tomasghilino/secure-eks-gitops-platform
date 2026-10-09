@@ -1,0 +1,29 @@
+apiVersion: policies.kyverno.io/v1
+kind: NamespacedValidatingPolicy
+metadata:
+  name: disallow-latest-tag
+spec:
+  {{- include "baseline.podPolicySpec" . | nindent 2 }}
+  validations:
+    - expression: "variables.containers.all(c, image(c.image).containsDigest() || !(image(c.image).tag() in ['', 'latest']))"
+      message: every image needs a fixed tag or a digest, never latest or no tag
+---
+apiVersion: policies.kyverno.io/v1
+kind: NamespacedValidatingPolicy
+metadata:
+  name: require-memory-limit
+spec:
+  {{- include "baseline.podPolicySpec" . | nindent 2 }}
+  validations:
+    - expression: "variables.containers.all(c, 'memory' in c.?resources.?limits.orValue({}))"
+      message: every container needs a memory limit
+---
+apiVersion: policies.kyverno.io/v1
+kind: NamespacedValidatingPolicy
+metadata:
+  name: disallow-service-account-token
+spec:
+  {{- include "baseline.podPolicySpec" . | nindent 2 }}
+  validations:
+    - expression: "object.spec.?automountServiceAccountToken.orValue(true) == false"
+      message: pods must set automountServiceAccountToken to false

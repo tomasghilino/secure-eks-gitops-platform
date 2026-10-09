@@ -3,3 +3,7 @@ podSecurityVersion: v1.35
 
 # groups that can read this namespace (no secrets, no changes)
 viewerGroups: []
+
+kyverno:
+  # Audit only records violations in policy reports; Deny rejects them
+  action: Audit
