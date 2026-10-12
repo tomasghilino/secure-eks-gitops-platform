@@ -25,6 +25,12 @@ spec:
         {{- toYaml .Values.database.networkPeers | nindent 8 }}
       ports:
         - port: {{ .Values.database.port }}
+    {{- if .Values.traces.endpoint }}
+    - to:
+        {{- toYaml .Values.traces.collectorPeers | nindent 8 }}
+      ports:
+        - port: {{ .Values.traces.port }}
+    {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

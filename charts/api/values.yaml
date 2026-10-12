@@ -36,6 +36,19 @@ metrics:
   serviceMonitorLabels:
     release: kube-prometheus-stack
 
+traces:
+  # the node-local opentelemetry collector; empty means traces are not exported
+  endpoint: http://opentelemetry-collector.monitoring-agents:4318
+  port: 4318
+  # the only pods the api may send traces to
+  collectorPeers:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring-agents
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: opentelemetry-collector
+
 resources:
   requests:
     cpu: 100m

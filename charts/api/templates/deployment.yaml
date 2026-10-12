@@ -31,6 +31,12 @@ spec:
               containerPort: {{ .Values.metrics.port }}
           env:
             {{- include "api.env" . | nindent 12 }}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: deployment.environment.name={{ .Release.Namespace }}
+            {{- with .Values.traces.endpoint }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ . | quote }}
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /health/ready
