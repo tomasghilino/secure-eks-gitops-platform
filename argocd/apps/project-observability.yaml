@@ -11,6 +11,7 @@ spec:
     - git@github.com:tomasghilino/secure-eks-gitops-platform.git
     - https://prometheus-community.github.io/helm-charts
     - https://grafana-community.github.io/helm-charts
+    - https://open-telemetry.github.io/opentelemetry-helm-charts
   destinations:
     - server: https://kubernetes.default.svc
       namespace: monitoring

@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opentelemetry-collector
+  namespace: argocd
+spec:
+  project: observability
+  sources:
+    - repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+      chart: opentelemetry-collector
+      targetRevision: 0.175.0
+      helm:
+        releaseName: opentelemetry-collector
+        valueFiles:
+          - $values/observability/opentelemetry-collector.yaml
+    - repoURL: git@github.com:tomasghilino/secure-eks-gitops-platform.git
+      targetRevision: dev
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring-agents
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

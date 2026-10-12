@@ -1,0 +1,79 @@
+# installed by argocd/apps/opentelemetry-collector.yaml, which pins the chart version
+# one collector per node: it tails the container log files of that node and receives traces from the
+# pods running there (the service routes to the local collector), then forwards both to loki and tempo
+mode: daemonset
+namespaceOverride: monitoring-agents
+
+image:
+  repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-k8s
+  # pinned after cosign verified it was signed by the collector-releases base-release workflow at v0.161.0
+  digest: sha256:2fed8ff024bdb42473890724fa0833bd31e16197aa4790d8e0be3829f87f0de1
+command:
+  name: otelcol-k8s
+
+presets:
+  # reads /var/log/pods from the host
+  logsCollection:
+    enabled: true
+  # adds namespace, pod and workload names to every log line and span
+  kubernetesAttributes:
+    enabled: true
+
+config:
+  receivers:
+    jaeger: null
+    zipkin: null
+    prometheus: null
+  exporters:
+    otlphttp/loki:
+      endpoint: http://loki.monitoring:3100/otlp
+    otlp/tempo:
+      endpoint: tempo.monitoring:4317
+      tls:
+        insecure: true
+  service:
+    pipelines:
+      logs:
+        exporters: [otlphttp/loki]
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, batch]
+        exporters: [otlp/tempo]
+      metrics: null
+
+ports:
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+
+service:
+  enabled: true
+
+# also run on the control plane node, so the logs of the system pods there are collected
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+
+# the log files on the host belong to root, so the collector reads them as root, with no capabilities
+securityContext:
+  runAsUser: 0
+  runAsGroup: 0
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
