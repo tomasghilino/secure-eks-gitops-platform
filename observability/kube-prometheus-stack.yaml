@@ -62,6 +62,39 @@ grafana:
       folderAnnotation: grafana_folder
       provider:
         foldersFromFilesStructure: true
+  additionalDataSources:
+    - name: Loki
+      uid: loki
+      type: loki
+      url: http://loki.monitoring:3100
+      jsonData:
+        # the request log carries the trace id, so each line links to its trace
+        derivedFields:
+          - name: traceId
+            matcherRegex: '"traceId":"(\w+)"'
+            datasourceUid: tempo
+            url: $${__value.raw}
+            urlDisplayLabel: Open trace
+    - name: Tempo
+      uid: tempo
+      type: tempo
+      url: http://tempo.monitoring:3200
+      jsonData:
+        # from a span to the logs of the same request
+        tracesToLogsV2:
+          datasourceUid: loki
+          filterByTraceID: true
+          spanStartTimeShift: -5m
+          spanEndTimeShift: 5m
+          tags:
+            - key: k8s.namespace.name
+              value: k8s_namespace_name
+            - key: k8s.deployment.name
+              value: k8s_deployment_name
+        lokiSearch:
+          datasourceUid: loki
+        nodeGraph:
+          enabled: true
   grafana.ini:
     analytics:
       reporting_enabled: false
