@@ -59,6 +59,9 @@ grafana:
   sidecar:
     dashboards:
       searchNamespace: null
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
   grafana.ini:
     analytics:
       reporting_enabled: false

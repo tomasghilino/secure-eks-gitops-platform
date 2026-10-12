@@ -17,6 +17,9 @@ spec:
       targetRevision: dev
       ref: values
       path: observability/namespaces
+    - repoURL: git@github.com:tomasghilino/secure-eks-gitops-platform.git
+      targetRevision: dev
+      path: observability/dashboards
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
