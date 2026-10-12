@@ -52,6 +52,13 @@ grafana:
   # created by scripts/kind-up.sh, never stored in git
   admin:
     existingSecret: grafana-admin
+  # by default the sidecars watch every namespace through a ClusterRole that can read every Secret
+  # in the cluster; dashboards and data sources only live in monitoring, so a Role there is enough
+  rbac:
+    namespaced: true
+  sidecar:
+    dashboards:
+      searchNamespace: null
   grafana.ini:
     analytics:
       reporting_enabled: false
@@ -63,6 +70,35 @@ grafana:
 kube-state-metrics:
   image:
     sha: sha256:42cfe3723a5f058171c627537fb57a3ea0f26e4380fa18555a95cb1a1b4cfc5b
+  # the chart default minus configmaps and secrets: listing them returns their contents, and the
+  # metrics about them are not used
+  collectors:
+    - certificatesigningrequests
+    - cronjobs
+    - daemonsets
+    - deployments
+    - endpointslices
+    - horizontalpodautoscalers
+    - ingresses
+    - jobs
+    - leases
+    - limitranges
+    - mutatingwebhookconfigurations
+    - namespaces
+    - networkpolicies
+    - nodes
+    - persistentvolumeclaims
+    - persistentvolumes
+    - poddisruptionbudgets
+    - pods
+    - replicasets
+    - replicationcontrollers
+    - resourcequotas
+    - services
+    - statefulsets
+    - storageclasses
+    - validatingwebhookconfigurations
+    - volumeattachments
 
 prometheus-node-exporter:
   # needs the host network, pid namespace and filesystem, so it runs apart from the rest
