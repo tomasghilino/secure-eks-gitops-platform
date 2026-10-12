@@ -1,4 +1,4 @@
 replicaCount: 1
 
 image:
-  tag: "dc0fcd7"
+  tag: "3cf8bab"
