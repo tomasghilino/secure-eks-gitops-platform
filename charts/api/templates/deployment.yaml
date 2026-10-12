@@ -27,6 +27,8 @@ spec:
           ports:
             - name: http
               containerPort: 3000
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
           env:
             {{- include "api.env" . | nindent 12 }}
           readinessProbe:

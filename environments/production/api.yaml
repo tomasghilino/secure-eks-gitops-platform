@@ -2,3 +2,7 @@ replicaCount: 2
 
 image:
   tag: "dc0fcd7"
+
+# the image running here has no metrics endpoint yet; promoting an instrumented image turns this on
+metrics:
+  enabled: false

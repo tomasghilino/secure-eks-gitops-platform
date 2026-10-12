@@ -19,6 +19,23 @@ database:
 service:
   port: 80
 
+metrics:
+  # the opentelemetry exporter in the image listens on this port
+  port: 9464
+  # adds the service port, the network policy rule and the ServiceMonitor; off where the image has no metrics yet
+  enabled: true
+  # the only pods allowed to read the metrics port
+  scrapers:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+  # prometheus only picks up ServiceMonitors with this label
+  serviceMonitorLabels:
+    release: kube-prometheus-stack
+
 resources:
   requests:
     cpu: 100m

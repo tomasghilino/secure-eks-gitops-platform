@@ -14,6 +14,12 @@ spec:
   ingress:
     - ports:
         - port: http
+    {{- if .Values.metrics.enabled }}
+    - from:
+        {{- toYaml .Values.metrics.scrapers | nindent 8 }}
+      ports:
+        - port: metrics
+    {{- end }}
   egress:
     - to:
         {{- toYaml .Values.database.networkPeers | nindent 8 }}
