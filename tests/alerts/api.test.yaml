@@ -1,0 +1,95 @@
+# promtool test rules tests/alerts/api.test.yaml
+# the rules are rendered from charts/api for the staging namespace by the ci charts job
+rule_files:
+  - ../../rendered/api-rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  - name: one request in ten fails
+    interval: 1m
+    input_series:
+      - series: 'http_server_request_duration_count{job="api", namespace="staging", http_response_status_code="200"}'
+        values: '0+90x20'
+      - series: 'http_server_request_duration_count{job="api", namespace="staging", http_response_status_code="500"}'
+        values: '0+10x20'
+    alert_rule_test:
+      # true for less than 5 minutes: still pending
+      - eval_time: 4m
+        alertname: ApiHighErrorRate
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: ApiHighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: staging
+            exp_annotations:
+              summary: The API in staging is failing requests
+              description: 10% of requests returned a 5xx error over the last 5 minutes.
+
+  - name: one request in a hundred fails
+    interval: 1m
+    input_series:
+      - series: 'http_server_request_duration_count{job="api", namespace="staging", http_response_status_code="200"}'
+        values: '0+99x20'
+      - series: 'http_server_request_duration_count{job="api", namespace="staging", http_response_status_code="500"}'
+        values: '0+1x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ApiHighErrorRate
+        exp_alerts: []
+
+  - name: errors in another namespace are not ours
+    interval: 1m
+    input_series:
+      - series: 'http_server_request_duration_count{job="api", namespace="production", http_response_status_code="500"}'
+        values: '0+100x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ApiHighErrorRate
+        exp_alerts: []
+
+  - name: every request takes close to a second
+    interval: 1m
+    input_series:
+      - series: 'http_server_request_duration_bucket{job="api", namespace="staging", le="0.1"}'
+        values: '0x20'
+      - series: 'http_server_request_duration_bucket{job="api", namespace="staging", le="0.5"}'
+        values: '0x20'
+      - series: 'http_server_request_duration_bucket{job="api", namespace="staging", le="1"}'
+        values: '0+60x20'
+      - series: 'http_server_request_duration_bucket{job="api", namespace="staging", le="+Inf"}'
+        values: '0+60x20'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: ApiHighLatency
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: ApiHighLatency
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: staging
+            exp_annotations:
+              summary: The API in staging is slow
+              description: 95% of requests took up to 975ms over the last 5 minutes.
+
+  - name: no ready pods
+    interval: 1m
+    input_series:
+      - series: 'kube_deployment_status_replicas_available{namespace="staging", deployment="api"}'
+        values: '1 1 1 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: ApiUnavailable
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: ApiUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: staging
+            exp_annotations:
+              summary: The API in staging has no ready pods
+              description: No pod of the api deployment has passed its readiness probe for 2 minutes.

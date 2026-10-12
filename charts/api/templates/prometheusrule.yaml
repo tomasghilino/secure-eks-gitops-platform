@@ -1,0 +1,45 @@
+{{- if .Values.metrics.enabled }}
+{{- $ns := .Release.Namespace }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "api.labels" . | nindent 4 }}
+    {{- toYaml .Values.metrics.serviceMonitorLabels | nindent 4 }}
+spec:
+  groups:
+    - name: api
+      rules:
+        - alert: ApiHighErrorRate
+          expr: |
+            sum(rate(http_server_request_duration_count{job="api", namespace="{{ $ns }}", http_response_status_code=~"5.."}[5m]))
+              / sum(rate(http_server_request_duration_count{job="api", namespace="{{ $ns }}"}[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+            namespace: {{ $ns }}
+          annotations:
+            summary: The API in {{ $ns }} is failing requests
+            description: "{{`{{ $value | humanizePercentage }}`}} of requests returned a 5xx error over the last 5 minutes."
+        - alert: ApiHighLatency
+          expr: |
+            histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_bucket{job="api", namespace="{{ $ns }}"}[5m]))) > 0.5
+          for: 10m
+          labels:
+            severity: warning
+            namespace: {{ $ns }}
+          annotations:
+            summary: The API in {{ $ns }} is slow
+            description: "95% of requests took up to {{`{{ $value | humanizeDuration }}`}} over the last 5 minutes."
+        - alert: ApiUnavailable
+          expr: |
+            sum(kube_deployment_status_replicas_available{namespace="{{ $ns }}", deployment="{{ .Release.Name }}"}) == 0
+          for: 2m
+          labels:
+            severity: critical
+            namespace: {{ $ns }}
+          annotations:
+            summary: The API in {{ $ns }} has no ready pods
+            description: No pod of the {{ .Release.Name }} deployment has passed its readiness probe for 2 minutes.
+{{- end }}
