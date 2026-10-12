@@ -62,6 +62,14 @@ for env in staging production; do
   fi
 done
 
+echo "==> monitoring"
+kubectl apply -f observability/namespaces/namespaces.yaml
+if ! kubectl get secret grafana-admin --namespace monitoring >/dev/null 2>&1; then
+  kubectl create secret generic grafana-admin --namespace monitoring \
+    --from-literal=admin-user=admin \
+    --from-literal=admin-password="$(openssl rand -hex 24 | tr -d '\r')"
+fi
+
 echo "==> bootstrap"
 kubectl apply -f argocd/bootstrap.yaml
 kubectl wait application root --namespace argocd --for=jsonpath='{.status.sync.status}'=Synced --timeout=300s
@@ -75,4 +83,10 @@ Argo CD UI:
   https://localhost:8080  (user admin)
 Admin password:
   kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d
+
+Grafana UI:
+  kubectl port-forward service/kube-prometheus-stack-grafana -n monitoring 3001:80
+  http://localhost:3001  (user admin)
+Admin password:
+  kubectl get secret grafana-admin -n monitoring -o jsonpath="{.data.admin-password}" | base64 -d
 EOF
