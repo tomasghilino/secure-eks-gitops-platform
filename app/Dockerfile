@@ -21,5 +21,5 @@ COPY --from=build /app/dist ./dist
 COPY package.json ./
 COPY migrations ./migrations
 USER 65532:65532
-EXPOSE 3000
-CMD ["dist/main.js"]
+EXPOSE 3000 9464
+CMD ["--import", "./dist/instrumentation.js", "dist/main.js"]

@@ -1,13 +1,13 @@
 import { EventEmitter } from 'node:events';
 import { Logger } from '@nestjs/common';
+import { trace } from '@opentelemetry/api';
 import type { Request, Response } from 'express';
 import { RequestLoggingMiddleware } from './request-logging.middleware.js';
 
-function handle(status: number, headers: Record<string, string> = {}) {
+function handle(status: number) {
   const req = {
     method: 'GET',
     originalUrl: '/users?email=ada@example.com',
-    get: (name: string) => headers[name.toLowerCase()],
   } as unknown as Request;
   const res = Object.assign(new EventEmitter(), {
     statusCode: status,
@@ -61,11 +61,19 @@ describe('RequestLoggingMiddleware', () => {
     );
   });
 
-  it('includes the load balancer trace id', () => {
-    handle(200, { 'x-amzn-trace-id': 'Root=1-67890abc-def' });
+  it('includes the trace id of the request span', () => {
+    vi.spyOn(trace, 'getActiveSpan').mockReturnValueOnce(
+      trace.wrapSpanContext({
+        traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+        spanId: '00f067aa0ba902b7',
+        traceFlags: 1,
+      }),
+    );
+
+    handle(200);
 
     expect(log).toHaveBeenCalledWith(
-      expect.objectContaining({ traceId: 'Root=1-67890abc-def' }),
+      expect.objectContaining({ traceId: '4bf92f3577b34da6a3ce929d0e0e4736' }),
     );
   });
 });

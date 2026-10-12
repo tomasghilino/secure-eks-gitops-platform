@@ -1,4 +1,5 @@
 import { Injectable, Logger, NestMiddleware } from '@nestjs/common';
+import { trace } from '@opentelemetry/api';
 import type { NextFunction, Request, Response } from 'express';
 
 @Injectable()
@@ -7,6 +8,7 @@ export class RequestLoggingMiddleware implements NestMiddleware {
 
   use(req: Request, res: Response, next: NextFunction): void {
     const start = performance.now();
+    const traceId = trace.getActiveSpan()?.spanContext().traceId;
 
     res.on('finish', () => {
       const entry = {
@@ -14,7 +16,7 @@ export class RequestLoggingMiddleware implements NestMiddleware {
         path: req.originalUrl.split('?')[0],
         status: res.statusCode,
         durationMs: Math.round(performance.now() - start),
-        traceId: req.get('x-amzn-trace-id'),
+        traceId,
       };
 
       if (res.statusCode >= 500) {
