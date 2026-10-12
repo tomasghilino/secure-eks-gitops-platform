@@ -11,6 +11,15 @@ kubeEtcd:
   enabled: false
 kubeProxy:
   enabled: false
+# the kube-dns service already exposes metrics, so nothing has to be created in kube-system
+coreDns:
+  service:
+    enabled: false
+  serviceMonitor:
+    selector:
+      matchLabels:
+        k8s-app: kube-dns
+    port: metrics
 
 prometheusOperator:
   image:
