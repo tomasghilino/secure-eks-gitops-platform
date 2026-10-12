@@ -138,6 +138,18 @@ jobs:
         with:
           persist-credentials: false
       - run: docker build -t "$IMAGE" app
+      # the instrumentation patches libraries at startup and breaks silently when they change
+      - name: smoke test metrics
+        run: |
+          docker run -d --name api -p 127.0.0.1:3000:3000 -p 127.0.0.1:9464:9464 \
+            -e PGHOST=127.0.0.1 -e PGDATABASE=smoke -e PGUSER=smoke -e PGPASSWORD=smoke "$IMAGE"
+          for _ in $(seq 30); do curl -fs -m 2 http://127.0.0.1:3000/health > /dev/null && break; sleep 1; done
+          curl -s -m 10 -o /dev/null http://127.0.0.1:3000/users || true
+          curl -fs -m 5 http://127.0.0.1:9464/metrics > metrics.txt || true
+          grep 'http_server_request_duration_count{.*http_route="/users"' metrics.txt || {
+            docker logs api; cat metrics.txt; exit 1
+          }
+          docker stop api
       - run: docker save -o image.tar "$IMAGE"
       - name: trivy image vulnerabilities
         run: >-
