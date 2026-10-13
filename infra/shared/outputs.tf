@@ -9,3 +9,7 @@ output "signing_key_alias" {
 output "signing_public_key" {
   value = data.aws_kms_public_key.signing.public_key_pem
 }
+
+output "github_ci_role_arn" {
+  value = aws_iam_role.github_ci.arn
+}
