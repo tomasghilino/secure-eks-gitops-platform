@@ -171,7 +171,7 @@ jobs:
       - name: checkov
         run: >-
           docker run --rm --network none -v "$PWD:/work" -w /work "$CHECKOV_IMAGE"
-          -d infra --framework terraform --quiet --compact --skip-download
+          -d infra --framework terraform --external-checks-dir checkov --quiet --compact --skip-download
 
   image:
     needs: [test, secrets, sast, deps, charts]
