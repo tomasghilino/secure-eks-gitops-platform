@@ -183,7 +183,8 @@ jobs:
     steps:
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.AWS_CI_ROLE_ARN }}
+          # a secret, not a variable: step inputs are printed in the log and the arn holds the account id
+          role-to-assume: ${{ secrets.AWS_CI_ROLE_ARN }}
           role-session-name: ci-${{ github.run_id }}
           aws-region: us-east-1
           mask-aws-account-id: true
