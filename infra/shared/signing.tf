@@ -18,7 +18,8 @@ data "aws_iam_policy_document" "signing_key" {
 
 # the private half never leaves kms: ci asks kms to sign image digests, and anyone holding
 # the public key can verify them
-resource "aws_kms_key" "signing" {
+# aws cannot rotate asymmetric keys
+resource "aws_kms_key" "signing" { # nosemgrep: terraform.aws.security.aws-kms-no-rotation.aws-kms-no-rotation
   description              = "cosign image signing"
   customer_master_key_spec = "ECC_NIST_P256"
   key_usage                = "SIGN_VERIFY"

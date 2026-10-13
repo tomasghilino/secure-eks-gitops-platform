@@ -14,7 +14,7 @@ resource "aws_ecr_registry_scanning_configuration" "main" {
 
 # no lifecycle policy yet: cosign stores signatures as untagged artifacts, so an untagged expiry rule
 # is only added once a signed image can be checked against the lifecycle preview
-resource "aws_ecr_repository" "api" {
+resource "aws_ecr_repository" "api" { # nosemgrep: terraform.lang.security.ecr-image-scan-on-push.ecr-image-scan-on-push
   #checkov:skip=CKV_AWS_163:scan on push is configured for the whole registry above
   name                 = "segp-api"
   image_tag_mutability = "IMMUTABLE"
