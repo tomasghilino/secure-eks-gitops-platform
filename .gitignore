@@ -14,3 +14,8 @@ Thumbs.db
 .vscode/
 
 rendered/
+
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
