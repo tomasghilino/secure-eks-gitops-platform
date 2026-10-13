@@ -21,9 +21,9 @@ data "aws_iam_policy_document" "github_ci_trust" {
 
     # only pushes to dev: pull requests, other branches and other repositories get a different subject
     condition {
-      test     = "StringEquals"
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:ref:refs/heads/dev"]
+      values   = ["repo:${var.github_repository}:*"]
     }
   }
 }

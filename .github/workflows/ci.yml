@@ -175,7 +175,6 @@ jobs:
 
   # proves the oidc login; the role only trusts pushes to dev, so pull requests never get aws credentials
   aws:
-    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
