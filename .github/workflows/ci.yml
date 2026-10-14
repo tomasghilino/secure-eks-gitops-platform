@@ -173,24 +173,6 @@ jobs:
           docker run --rm --network none -v "$PWD:/work" -w /work "$CHECKOV_IMAGE"
           -d infra --framework terraform --external-checks-dir checkov --quiet --compact --skip-download
 
-  # proves the oidc login; the role only trusts pushes to dev, so pull requests never get aws credentials
-  aws:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      id-token: write
-    steps:
-      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
-        with:
-          # a secret, not a variable: step inputs are printed in the log and the arn holds the account id
-          role-to-assume: ${{ secrets.AWS_CI_ROLE_ARN }}
-          role-session-name: ci-${{ github.run_id }}
-          aws-region: us-east-1
-          mask-aws-account-id: true
-      - name: who am i
-        run: aws sts get-caller-identity --query Arn --output text | cut -d/ -f2-
-
   image:
     needs: [test, secrets, sast, deps, charts]
     runs-on: ubuntu-24.04
@@ -237,3 +219,46 @@ jobs:
           path: sbom.cdx.json
           if-no-files-found: error
           retention-days: 30
+      # only pushes publish, and the next job pushes exactly this tarball, so the scanned image is the published one
+      - if: github.event_name == 'push'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-${{ github.sha }}
+          path: image.tar
+          if-no-files-found: error
+          retention-days: 1
+
+  # a separate machine: the build runs code downloaded by npm, so it never shares a job with aws credentials
+  # the role only trusts pushes to dev, so pull requests never get them
+  publish:
+    if: github.event_name == 'push'
+    needs: [image, terraform]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+    env:
+      REPOSITORY: segp-api
+    steps:
+      # fails if the tarball does not match the digest recorded at upload
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-${{ github.sha }}
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          # a secret, not a variable: step inputs are printed in the log and the arn holds the account id
+          role-to-assume: ${{ secrets.AWS_CI_ROLE_ARN }}
+          role-session-name: ci-${{ github.run_id }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+      # the tag is a label for humans; the digest the registry returns is what gets signed and deployed
+      - name: push to ecr
+        run: |
+          registry="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION}.amazonaws.com"
+          docker load -i image.tar
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
+          docker tag "$REPOSITORY:$GITHUB_SHA" "$registry/$REPOSITORY:$GITHUB_SHA"
+          docker push "$registry/$REPOSITORY:$GITHUB_SHA"
+          digest=$(aws ecr describe-images --repository-name "$REPOSITORY" --image-ids "imageTag=$GITHUB_SHA" \
+            --query 'imageDetails[0].imageDigest' --output text)
+          echo "pushed $REPOSITORY@$digest" | tee -a "$GITHUB_STEP_SUMMARY"
