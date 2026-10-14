@@ -279,7 +279,7 @@ jobs:
             --query 'imageDetails[0].imageDigest' --output text)
           echo "pushed $REPOSITORY@$digest" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "IMAGE_REF=$registry/$REPOSITORY@$digest" >> "$GITHUB_ENV"
-      # no rekor: the repository is private, and the public log would record the image name, which holds the account id
+      # no rekor: its public log is permanent and the repository is private; cloudtrail records every kms:Sign instead
       # cosign reads the ecr login that docker saved; kms signs, so the private key never leaves aws
       - name: sign
         run: |
