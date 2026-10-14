@@ -28,9 +28,45 @@ data "aws_iam_policy_document" "github_ci_trust" {
   }
 }
 
-# no permissions yet: phase 8 adds pushing to ecr and signing with the kms key
 resource "aws_iam_role" "github_ci" {
   name                 = "segp-github-ci"
   assume_role_policy   = data.aws_iam_policy_document.github_ci_trust.json
   max_session_duration = 3600
+}
+
+data "aws_iam_policy_document" "github_ci" {
+  # the login token itself cannot be limited to one repository
+  statement {
+    sid       = "EcrLogin"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  # read is needed too: cosign and trivy fetch the pushed image by digest
+  statement {
+    sid = "PushApiImages"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:CompleteLayerUpload",
+      "ecr:DescribeImages",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:InitiateLayerUpload",
+      "ecr:PutImage",
+      "ecr:UploadLayerPart",
+    ]
+    resources = [aws_ecr_repository.api.arn]
+  }
+
+  statement {
+    sid       = "SignImages"
+    actions   = ["kms:DescribeKey", "kms:GetPublicKey", "kms:Sign"]
+    resources = [aws_kms_key.signing.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "github_ci" {
+  name   = "publish-api-image"
+  role   = aws_iam_role.github_ci.id
+  policy = data.aws_iam_policy_document.github_ci.json
 }
