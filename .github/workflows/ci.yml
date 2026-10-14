@@ -239,6 +239,9 @@ jobs:
       id-token: write
     env:
       REPOSITORY: segp-api
+      # the login step always prints the role id, and aws ids like AROA... encode the account id;
+      # github masks every secret a job uses, so this hides it
+      ROLE_ID: ${{ secrets.AWS_CI_ROLE_ID }}
     steps:
       # fails if the tarball does not match the digest recorded at upload
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -251,6 +254,11 @@ jobs:
           role-session-name: ci-${{ github.run_id }}
           aws-region: us-east-1
           mask-aws-account-id: true
+      # an empty or stale secret would mask nothing without anyone noticing
+      - name: check the role id is masked
+        run: |
+          [ "$(aws sts get-caller-identity --query UserId --output text | cut -d: -f1)" = "$ROLE_ID" ] || {
+            echo "secret AWS_CI_ROLE_ID does not match the role, so the log shows its id"; exit 1; }
       # the tag is a label for humans; the digest the registry returns is what gets signed and deployed
       - name: push to ecr
         run: |
