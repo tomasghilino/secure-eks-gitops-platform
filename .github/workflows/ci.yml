@@ -208,17 +208,6 @@ jobs:
           docker run --rm -v "$PWD:/work" -w /work -v "$RUNNER_TEMP/trivy:/cache" "$TRIVY_IMAGE"
           image --cache-dir /cache --input image.tar
           --scanners secret --exit-code 1 --table-mode detailed
-      - name: sbom
-        run: >-
-          docker run --rm -v "$PWD:/work" -w /work -v "$RUNNER_TEMP/trivy:/cache" "$TRIVY_IMAGE"
-          image --cache-dir /cache --input image.tar
-          --format cyclonedx --output sbom.cdx.json
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: sbom-${{ github.sha }}
-          path: sbom.cdx.json
-          if-no-files-found: error
-          retention-days: 30
       # only pushes publish, and the next job pushes exactly this tarball, so the scanned image is the published one
       - if: github.event_name == 'push'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -279,18 +268,62 @@ jobs:
             --query 'imageDetails[0].imageDigest' --output text)
           echo "pushed $REPOSITORY@$digest" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "IMAGE_REF=$registry/$REPOSITORY@$digest" >> "$GITHUB_ENV"
+      # generated from the pushed image, so it names the image the cluster will run
+      - name: sbom
+        run: >-
+          docker run --rm -v "$PWD:/work" -w /work -v "$HOME/.docker:/docker:ro" -e DOCKER_CONFIG=/docker "$TRIVY_IMAGE"
+          image --image-src remote --format cyclonedx --output sbom.cdx.json "$IMAGE_REF"
+      # written by this workflow, not by github, so it only reaches slsa build level 1: whoever edits the workflow can write anything here
+      - name: provenance
+        run: |
+          workflow="${GITHUB_WORKFLOW_REF%@*}"
+          jq -n \
+            --arg repo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --arg path "${workflow#"$GITHUB_REPOSITORY/"}" \
+            --arg ref "$GITHUB_REF" \
+            --arg sha "$GITHUB_SHA" \
+            --arg event "$GITHUB_EVENT_NAME" \
+            --arg repo_id "$GITHUB_REPOSITORY_ID" \
+            --arg owner_id "$GITHUB_REPOSITORY_OWNER_ID" \
+            --arg runner "$RUNNER_ENVIRONMENT" \
+            --arg run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT" \
+            '{
+              buildDefinition: {
+                buildType: "https://actions.github.io/buildtypes/workflow/v1",
+                externalParameters: {workflow: {ref: $ref, repository: $repo, path: $path}},
+                internalParameters: {github: {event_name: $event, repository_id: $repo_id, repository_owner_id: $owner_id, runner_environment: $runner}},
+                resolvedDependencies: [{uri: "git+\($repo)@\($ref)", digest: {gitCommit: $sha}}]
+              },
+              runDetails: {
+                builder: {id: "\($repo)/\($path)@\($ref)"},
+                metadata: {invocationId: $run}
+              }
+            }' > provenance.json
+          cat provenance.json
       # no rekor: its public log is permanent and the repository is private; cloudtrail records every kms:Sign instead
       # cosign reads the ecr login that docker saved; kms signs, so the private key never leaves aws
-      - name: sign
+      - name: sign and attest
         run: |
           cosign() {
-            docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w /work               -v "$HOME/.docker:/docker:ro" -e DOCKER_CONFIG=/docker               -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_REGION               "$COSIGN_IMAGE" "$@"
+            docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w /work \
+              -v "$HOME/.docker:/docker:ro" -e DOCKER_CONFIG=/docker \
+              -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_REGION \
+              "$COSIGN_IMAGE" "$@"
           }
           cosign signing-config create --out no-services.json
           cosign sign --yes --key awskms:///alias/segp-cosign --signing-config no-services.json "$IMAGE_REF"
-      # checks the signature against the key in git, the same one the cluster will use
-      - name: verify signature
-        run: >-
-          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w /work
-          -v "$HOME/.docker:/docker:ro" -e DOCKER_CONFIG=/docker
-          "$COSIGN_IMAGE" verify --key cosign.pub --insecure-ignore-tlog=true "$IMAGE_REF" > /dev/null
+          cosign attest --yes --key awskms:///alias/segp-cosign --signing-config no-services.json \
+            --type cyclonedx --predicate sbom.cdx.json "$IMAGE_REF"
+          cosign attest --yes --key awskms:///alias/segp-cosign --signing-config no-services.json \
+            --type slsaprovenance1 --predicate provenance.json "$IMAGE_REF"
+      # checks everything against the key in git, the same one the cluster will use
+      - name: verify
+        run: |
+          cosign() {
+            docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w /work \
+              -v "$HOME/.docker:/docker:ro" -e DOCKER_CONFIG=/docker \
+              "$COSIGN_IMAGE" "$@" --key cosign.pub --insecure-ignore-tlog=true "$IMAGE_REF" > /dev/null
+          }
+          cosign verify
+          cosign verify-attestation --type cyclonedx
+          cosign verify-attestation --type slsaprovenance1
