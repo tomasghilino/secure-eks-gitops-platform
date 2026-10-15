@@ -153,9 +153,11 @@ jobs:
         run: docker run --rm -v "$PWD:/work" -w /work "$TERRAFORM_IMAGE" fmt -check -diff -recursive infra
       # no backend and no credentials: this only checks the code, it never reads the state
       # a readonly lock file fails the job when a provider is missing the linux hashes
+      # modules are validated through the stacks that call them
       - name: validate
         run: |
           for stack in infra/*/; do
+            [ -f "$stack/backend.tf" ] || continue
             echo "== $stack"
             docker run --rm -v "$PWD:/work" -w "/work/$stack" -e TF_DATA_DIR=/tmp/terraform --entrypoint sh "$TERRAFORM_IMAGE" \
               -c 'terraform init -backend=false -lockfile=readonly -input=false && terraform validate'
