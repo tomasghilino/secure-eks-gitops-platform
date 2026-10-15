@@ -13,3 +13,7 @@ output "signing_public_key" {
 output "github_ci_role_arn" {
   value = aws_iam_role.github_ci.arn
 }
+
+output "logs_bucket_arn" {
+  value = aws_s3_bucket.logs.arn
+}
