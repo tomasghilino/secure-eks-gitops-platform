@@ -4,7 +4,7 @@ metadata:
   name: segp
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   description: Workloads of the secure EKS GitOps platform
   sourceRepos:

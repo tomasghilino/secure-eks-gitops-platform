@@ -1,0 +1,15 @@
+# installed by argocd/apps/external-secrets.yaml, which pins the chart version
+# the image is pinned by digest after cosign verified it was signed by
+# https://github.com/external-secrets/external-secrets/.github/workflows/release.yml@refs/heads/main
+image:
+  tag: v2.12.0@sha256:7a3c4f7e038fa0f86a3172da19b9388f3f4d846e87e9994ee3474c5b72a9330d
+webhook:
+  image:
+    tag: v2.12.0@sha256:7a3c4f7e038fa0f86a3172da19b9388f3f4d846e87e9994ee3474c5b72a9330d
+certController:
+  image:
+    tag: v2.12.0@sha256:7a3c4f7e038fa0f86a3172da19b9388f3f4d846e87e9994ee3474c5b72a9330d
+
+# the name the pod identity association in terraform expects; only the controller talks to aws
+serviceAccount:
+  name: external-secrets
