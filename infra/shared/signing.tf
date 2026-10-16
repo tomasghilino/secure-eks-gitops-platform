@@ -1,6 +1,7 @@
 data "aws_caller_identity" "current" {}
 
-data "aws_iam_policy_document" "signing_key" {
+# the default key policy: iam policies in this account decide who may use the key
+data "aws_iam_policy_document" "account_managed_key" {
   #checkov:skip=CKV_AWS_109:key policy, where "*" means this key only (aws default statement)
   #checkov:skip=CKV_AWS_111:key policy, where "*" means this key only (aws default statement)
   #checkov:skip=CKV_AWS_356:key policy, where "*" means this key only (aws default statement)
@@ -25,7 +26,7 @@ resource "aws_kms_key" "signing" { # nosemgrep: terraform.aws.security.aws-kms-n
   key_usage                = "SIGN_VERIFY"
   # losing this key means no image can be verified, so a deletion gets the longest window
   deletion_window_in_days = 30
-  policy                  = data.aws_iam_policy_document.signing_key.json
+  policy                  = data.aws_iam_policy_document.account_managed_key.json
 
   lifecycle {
     prevent_destroy = true
