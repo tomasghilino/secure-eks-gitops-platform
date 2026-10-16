@@ -17,8 +17,16 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
 {{- end }}
 
 {{- define "api.env" -}}
+{{- /* on rds the host is only known once the database exists, so it comes from the secret */ -}}
 - name: PGHOST
+{{- if .Values.database.host }}
   value: {{ .Values.database.host | quote }}
+{{- else }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.database.credentialsSecret }}
+      key: PGHOST
+{{- end }}
 - name: PGPORT
   value: {{ .Values.database.port | quote }}
 - name: PGDATABASE
@@ -33,4 +41,29 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
     secretKeyRef:
       name: {{ .Values.database.credentialsSecret }}
       key: PGPASSWORD
+{{- with .Values.database.sslMode }}
+- name: PGSSLMODE
+  value: {{ . | quote }}
+{{- end }}
+{{- if .Values.database.caConfigMap }}
+# node trusts these on top of its own list, so the database certificate is verified, not just accepted
+- name: NODE_EXTRA_CA_CERTS
+  value: /etc/database-ca/ca.pem
+{{- end }}
+{{- end }}
+
+{{- define "api.caVolumeMounts" -}}
+{{- if .Values.database.caConfigMap }}
+- name: database-ca
+  mountPath: /etc/database-ca
+  readOnly: true
+{{- end }}
+{{- end }}
+
+{{- define "api.caVolumes" -}}
+{{- if .Values.database.caConfigMap }}
+- name: database-ca
+  configMap:
+    name: {{ .Values.database.caConfigMap }}
+{{- end }}
 {{- end }}

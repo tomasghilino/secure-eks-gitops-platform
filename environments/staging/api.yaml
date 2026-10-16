@@ -4,3 +4,19 @@ replicaCount: 1
 image:
   tag: "750de9aa1357afb77dc163ed924c115d0fc167df"
   digest: "sha256:eec81819d13b5defbeb7165e8fa36acc933f4caa3b563a8a2047e1e14a5d4b44"
+
+# rds: the host and both logins come from secrets manager through external secrets (baseline chart)
+database:
+  host: ""
+  name: segp
+  # verify-full: encrypted, and the certificate must be signed by rds and match the host
+  sslMode: verify-full
+  caConfigMap: rds-ca
+  setup:
+    enabled: true
+  # the database subnets (10.20.2.0/24, 10.20.3.0/24 in terraform); nothing else in the vpc on 5432
+  networkPeers:
+    - ipBlock:
+        cidr: 10.20.2.0/24
+    - ipBlock:
+        cidr: 10.20.3.0/24

@@ -1,5 +1,5 @@
 # the only manifest applied by hand on the staging eks cluster: kubectl apply -f argocd/bootstrap-staging.yaml
-# same as bootstrap.yaml, except the root app leaves out production, which gets its own cluster
+# same as bootstrap.yaml, except the root app leaves out production and the in-cluster postgres
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -30,7 +30,8 @@ spec:
     targetRevision: dev
     path: argocd/apps
     directory:
-      exclude: "*-production.yaml"
+      # production gets its own cluster, and staging uses rds instead of the in-cluster postgres
+      exclude: "{*-production.yaml,postgres-staging.yaml}"
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

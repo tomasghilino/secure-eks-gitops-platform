@@ -37,3 +37,11 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          {{- with include "api.caVolumeMounts" . }}
+          volumeMounts:
+            {{- . | trim | nindent 12 }}
+          {{- end }}
+      {{- with include "api.caVolumes" . }}
+      volumes:
+        {{- . | trim | nindent 8 }}
+      {{- end }}

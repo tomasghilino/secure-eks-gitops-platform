@@ -1,0 +1,114 @@
+{{- if .Values.database.setup.enabled }}
+# a fresh managed database only has its admin login; this creates the api login before the migration runs,
+# so neither the migration nor the api ever hold the admin password
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-database-setup
+  labels:
+    {{- include "api.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-3"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}-database-setup
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - to:
+        {{- toYaml .Values.database.networkPeers | nindent 8 }}
+      ports:
+        - port: {{ .Values.database.port }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-database-setup
+  labels:
+    {{- include "api.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-2"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}-database-setup
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: database-setup
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        # the postgres user of the alpine image
+        runAsUser: 70
+        runAsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: setup
+          image: {{ .Values.database.setup.image }}
+          # idempotent: creates the role once, then resets its password and grants on every sync. the password
+          # reaches psql through the environment, never through its arguments or the sql text
+          command:
+            - sh
+            - -c
+            - |
+              psql --no-psqlrc --quiet --set=ON_ERROR_STOP=1 <<'SQL'
+              \getenv api_user API_USER
+              \getenv api_password API_PASSWORD
+              SELECT format('CREATE ROLE %I LOGIN', :'api_user') WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'api_user') \gexec
+              SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'api_user', :'api_password') \gexec
+              SELECT format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), :'api_user') \gexec
+              SELECT format('GRANT USAGE, CREATE ON SCHEMA public TO %I', :'api_user') \gexec
+              SQL
+          envFrom:
+            - secretRef:
+                name: {{ .Values.database.setup.adminSecret }}
+          env:
+            - name: API_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.credentialsSecret }}
+                  key: PGUSER
+            - name: API_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.credentialsSecret }}
+                  key: PGPASSWORD
+            {{- with .Values.database.sslMode }}
+            - name: PGSSLMODE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.database.caConfigMap }}
+            - name: PGSSLROOTCERT
+              value: /etc/database-ca/ca.pem
+            {{- end }}
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          {{- with include "api.caVolumeMounts" . }}
+          volumeMounts:
+            {{- . | trim | nindent 12 }}
+          {{- end }}
+      {{- with include "api.caVolumes" . }}
+      volumes:
+        {{- . | trim | nindent 8 }}
+      {{- end }}
+{{- end }}

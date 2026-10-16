@@ -7,10 +7,21 @@ image:
   pullPolicy: IfNotPresent
 
 database:
+  # empty: read PGHOST from the credentials secret
   host: postgres
   port: 5432
   name: api
   credentialsSecret: db-credentials
+  # libpq-style PGSSLMODE, for example verify-full
+  sslMode: ""
+  # configmap whose ca.pem is trusted for the database certificate
+  caConfigMap: ""
+  # creates the api login in a fresh managed database, using the admin credentials secret
+  setup:
+    enabled: false
+    adminSecret: db-admin
+    # the same postgres image as the local chart, for its psql client
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
   # where the api may connect on the database port; on EKS this becomes the RDS subnets
   networkPeers:
     - podSelector:
