@@ -1,4 +1,6 @@
 replicaCount: 1
 
+# built, scanned and signed by ci from commit 750de9a; the registry is added in the cluster
 image:
-  tag: "3cf8bab"
+  tag: "750de9aa1357afb77dc163ed924c115d0fc167df"
+  digest: "sha256:eec81819d13b5defbeb7165e8fa36acc933f4caa3b563a8a2047e1e14a5d4b44"
