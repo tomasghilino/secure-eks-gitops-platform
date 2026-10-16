@@ -55,11 +55,7 @@ helm upgrade --install kyverno kyverno/kyverno --version "$KYVERNO_CHART_VERSION
 
 echo "==> environment"
 kubectl get namespace "$ENV" >/dev/null 2>&1 || kubectl create namespace "$ENV"
-if ! kubectl get secret db-credentials --namespace "$ENV" >/dev/null 2>&1; then
-  kubectl create secret generic db-credentials --namespace "$ENV" \
-    --from-literal=PGUSER=api \
-    --from-literal=PGPASSWORD="$(openssl rand -hex 24 | tr -d '\r')"
-fi
+# the database credentials are not created here: external secrets copies them from secrets manager
 # the ecr address holds the account id, so it lives in the cluster instead of git;
 # the use-ecr-registry policy reads it when api pods are created
 registry="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$AWS_REGION.amazonaws.com"
