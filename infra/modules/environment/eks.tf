@@ -182,6 +182,11 @@ resource "aws_eks_addon" "vpc_cni" {
   addon_name    = "vpc-cni"
   addon_version = local.addon_versions.vpc_cni
 
+  # without this the cni accepts networkpolicy objects and silently enforces none of them
+  configuration_values = jsonencode({
+    enableNetworkPolicy = "true"
+  })
+
   pod_identity_association {
     role_arn        = aws_iam_role.pod["vpc-cni"].arn
     service_account = local.pod_roles["vpc-cni"].service_account
