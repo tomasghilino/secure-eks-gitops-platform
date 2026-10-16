@@ -26,8 +26,9 @@ spec:
     - name: has-api-image
       expression: "object.spec.containers.exists(c, c.image.startsWith('segp-api') && c.image.contains('@sha256:'))"
   variables:
+    # a namespaced policy can only read its own namespace, so the lookup takes no namespace
     - name: registry
-      expression: "resource.get('v1', 'configmaps', object.metadata.namespace, 'image-registry').data.registry"
+      expression: "resource.get('v1', 'configmaps', 'image-registry').data.registry"
   mutations:
     - patchType: ApplyConfiguration
       applyConfiguration:
