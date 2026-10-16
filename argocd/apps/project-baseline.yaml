@@ -26,3 +26,5 @@ spec:
       kind: RoleBinding
     - group: policies.kyverno.io
       kind: NamespacedValidatingPolicy
+    - group: policies.kyverno.io
+      kind: NamespacedMutatingPolicy

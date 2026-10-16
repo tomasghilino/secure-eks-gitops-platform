@@ -1,0 +1,41 @@
+# git names the api image without its registry (segp-api:<sha>@sha256:...), because the ecr address
+# contains the aws account id; the bootstrap script stores that address in the image-registry configmap
+# and this policy completes the image when a pod is created. only digest-pinned images are rewritten,
+# so a pull always gets exactly the image ci built, scanned and signed
+apiVersion: policies.kyverno.io/v1
+kind: NamespacedMutatingPolicy
+metadata:
+  name: use-ecr-registry
+spec:
+  # pods only: rewriting the deployment would leave argo cd with a permanent diff against git
+  autogen:
+    podControllers:
+      controllers: []
+  evaluation:
+    background:
+      enabled: false
+  # without the configmap the pod is rejected instead of pulling a segp-api image from docker hub
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [pods]
+  matchConditions:
+    - name: has-api-image
+      expression: "object.spec.containers.exists(c, c.image.startsWith('segp-api') && c.image.contains('@sha256:'))"
+  variables:
+    - name: registry
+      expression: "resource.get('v1', 'configmaps', object.metadata.namespace, 'image-registry').data.registry"
+  mutations:
+    - patchType: ApplyConfiguration
+      applyConfiguration:
+        expression: >-
+          Object{
+            spec: Object.spec{
+              containers: object.spec.containers
+                .filter(c, c.image.startsWith('segp-api') && c.image.contains('@sha256:'))
+                .map(c, Object.spec.containers{name: c.name, image: variables.registry + '/' + c.image})
+            }
+          }
