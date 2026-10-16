@@ -20,6 +20,12 @@ locals {
       service_account = "ebs-csi-controller-sa"
       policy_arn      = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
     }
+    # its permissions are an inline policy in database.tf
+    external-secrets = {
+      namespace       = "external-secrets"
+      service_account = "external-secrets"
+      policy_arn      = null
+    }
   }
 }
 
@@ -164,7 +170,7 @@ resource "aws_iam_role" "pod" {
 }
 
 resource "aws_iam_role_policy_attachment" "pod" {
-  for_each = local.pod_roles
+  for_each = { for k, v in local.pod_roles : k => v if v.policy_arn != null }
 
   role       = aws_iam_role.pod[each.key].name
   policy_arn = each.value.policy_arn
