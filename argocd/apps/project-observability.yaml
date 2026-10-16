@@ -4,7 +4,7 @@ metadata:
   name: observability
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   description: Monitoring stack; it brings its own CRDs, webhooks and cluster-wide read access
   sourceRepos:

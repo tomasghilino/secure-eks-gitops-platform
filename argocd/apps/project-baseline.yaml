@@ -4,7 +4,7 @@ metadata:
   name: baseline
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-wave: "-2"
 spec:
   description: Namespace guardrails owned by the platform, kept apart so app charts can't grant themselves access
   sourceRepos:

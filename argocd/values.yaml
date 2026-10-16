@@ -13,3 +13,21 @@ notifications:
 redis:
   image:
     tag: 8.6.4-alpine@sha256:2cc044fc5a07c9b701f8f1255a309ae9ad7856e694ac03513bf3648c01e40763
+
+configs:
+  cm:
+    # the root app waits for each sync wave of child apps to be healthy before the next one; argo cd
+    # stopped judging app health in 1.8, so without this every wave would count as done immediately
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = ""
+      if obj.status ~= nil then
+        if obj.status.health ~= nil then
+          hs.status = obj.status.health.status
+          if obj.status.health.message ~= nil then
+            hs.message = obj.status.health.message
+          end
+        end
+      end
+      return hs
