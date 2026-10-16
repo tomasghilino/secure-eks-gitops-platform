@@ -16,3 +16,30 @@ variable "zone_ids" {
 variable "flow_logs_bucket_arn" {
   type = string
 }
+
+variable "kubernetes_version" {
+  type = string
+}
+
+# the only address allowed to reach the public api endpoint, passed at apply time and never committed
+variable "admin_cidr" {
+  type = string
+}
+
+variable "admin_role_arn" {
+  description = "iam role that gets cluster admin through an access entry"
+  type        = string
+}
+
+variable "cluster_secrets_key_arn" {
+  type = string
+}
+
+variable "node_capacity_type" {
+  type = string
+}
+
+# several types, so a spot shortage in one doesn't leave the cluster without nodes
+variable "node_instance_types" {
+  type = list(string)
+}
