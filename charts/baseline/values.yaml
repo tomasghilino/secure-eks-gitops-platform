@@ -7,3 +7,10 @@ viewerGroups: []
 kyverno:
   # Audit only records violations in policy reports; Deny rejects them
   action: Deny
+
+# a managed database (rds): external secrets copies its credentials from aws secrets manager
+database:
+  enabled: false
+  # read from <secretsPrefix>/database/api and <secretsPrefix>/database/admin
+  secretsPrefix: ""
+  region: us-east-1

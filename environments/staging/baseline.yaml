@@ -1,2 +1,6 @@
 viewerGroups:
   - developers
+
+database:
+  enabled: true
+  secretsPrefix: segp-staging

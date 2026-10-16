@@ -1,0 +1,38 @@
+{{- if .Values.database.enabled }}
+# no auth block: external secrets uses its own pod identity role, which can only read this environment's secrets
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: aws-secrets-manager
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: {{ .Values.database.region }}
+{{- range $user, $secret := dict "api" "db-credentials" "admin" "db-admin" }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $secret }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: aws-secrets-manager
+  target:
+    name: {{ $secret }}
+  dataFrom:
+    - extract:
+        key: {{ $.Values.database.secretsPrefix }}/database/{{ $user }}
+{{- end }}
+---
+# the authorities that sign rds server certificates, so clients verify which database they reach
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rds-ca
+data:
+  ca.pem: |
+    {{- .Files.Get "files/rds-us-east-1-bundle.pem" | nindent 4 }}
+{{- end }}
