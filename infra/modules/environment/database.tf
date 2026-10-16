@@ -56,6 +56,24 @@ resource "aws_cloudwatch_log_group" "database" { # nosemgrep: terraform.aws.secu
   retention_in_days = 7
 }
 
+# rds loads pg_stat_statements with track_utility on, so it kept the text of ALTER ROLE ... PASSWORD,
+# password included, for anyone allowed to read query statistics
+resource "aws_db_parameter_group" "main" {
+  name   = var.name
+  family = "postgres17"
+
+  parameter {
+    name  = "pg_stat_statements.track_utility"
+    value = "0"
+  }
+
+  # already the default since postgres 15 on rds, stated so a changed default can't open plain connections
+  parameter {
+    name  = "rds.force_ssl"
+    value = "1"
+  }
+}
+
 resource "aws_db_instance" "main" {
   #checkov:skip=CKV_AWS_157:one zone is enough for staging; a standby doubles the cost
   #checkov:skip=CKV_AWS_293:the environment is destroyed at the end of every session
@@ -76,6 +94,7 @@ resource "aws_db_instance" "main" {
   password_wo         = ephemeral.random_password.database_admin.result
   password_wo_version = 1
 
+  parameter_group_name   = aws_db_parameter_group.main.name
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.database.id]
   publicly_accessible    = false
