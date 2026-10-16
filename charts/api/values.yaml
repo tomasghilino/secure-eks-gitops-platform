@@ -3,6 +3,7 @@ replicaCount: 2
 image:
   repository: segp-api
   tag: ""
+  digest: ""
   pullPolicy: IfNotPresent
 
 database:
