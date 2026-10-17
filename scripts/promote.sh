@@ -45,4 +45,6 @@ Promotes the image staging runs to production.
 - rollback: revert this pull request
 EOF
 )"
+# the branch lives on in github until the pull request is merged; the local copy is no longer needed
 git switch --quiet dev
+git branch --quiet --delete --force "$branch"
