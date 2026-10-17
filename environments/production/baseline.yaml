@@ -1,1 +1,5 @@
 viewerGroups: []
+
+database:
+  enabled: true
+  secretsPrefix: segp-production
