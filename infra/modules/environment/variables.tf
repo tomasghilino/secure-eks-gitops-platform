@@ -35,6 +35,11 @@ variable "cluster_secrets_key_arn" {
   type = string
 }
 
+# kyverno reads the signatures and attestations stored next to the images in this repository
+variable "api_repository_arn" {
+  type = string
+}
+
 variable "node_capacity_type" {
   type = string
 }

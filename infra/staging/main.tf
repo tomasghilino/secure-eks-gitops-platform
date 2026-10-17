@@ -28,6 +28,7 @@ module "environment" {
   admin_cidr              = var.admin_cidr
   admin_role_arn          = data.aws_iam_session_context.current.issuer_arn
   cluster_secrets_key_arn = data.terraform_remote_state.shared.outputs.cluster_secrets_key_arn
+  api_repository_arn      = data.terraform_remote_state.shared.outputs.api_repository_arn
 
   # staging can lose a node to a spot interruption without hurting anyone
   node_capacity_type  = "SPOT"

@@ -2,6 +2,10 @@ output "api_repository_url" {
   value = aws_ecr_repository.api.repository_url
 }
 
+output "api_repository_arn" {
+  value = aws_ecr_repository.api.arn
+}
+
 output "signing_key_alias" {
   value = aws_kms_alias.signing.name
 }

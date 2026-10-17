@@ -26,6 +26,12 @@ locals {
       service_account = "external-secrets"
       policy_arn      = null
     }
+    # verifies image signatures at admission; its permissions are an inline policy below
+    kyverno = {
+      namespace       = "kyverno"
+      service_account = "kyverno-admission-controller"
+      policy_arn      = null
+    }
   }
 }
 
@@ -174,6 +180,33 @@ resource "aws_iam_role_policy_attachment" "pod" {
 
   role       = aws_iam_role.pod[each.key].name
   policy_arn = each.value.policy_arn
+}
+
+# read only, and only the api repository: signatures and attestations are oci referrers of the image,
+# listed with BatchGetImage and downloaded as layers
+data "aws_iam_policy_document" "kyverno" {
+  statement {
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    actions   = ["ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer"]
+    resources = [var.api_repository_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "kyverno" {
+  name   = "read-api-images"
+  role   = aws_iam_role.pod["kyverno"].id
+  policy = data.aws_iam_policy_document.kyverno.json
+}
+
+resource "aws_eks_pod_identity_association" "kyverno" {
+  cluster_name    = aws_eks_cluster.main.name
+  namespace       = local.pod_roles["kyverno"].namespace
+  service_account = local.pod_roles["kyverno"].service_account
+  role_arn        = aws_iam_role.pod["kyverno"].arn
 }
 
 # networking add-ons go in before the nodes, or the nodes never become ready
