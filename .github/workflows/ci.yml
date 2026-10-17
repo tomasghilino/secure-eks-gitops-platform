@@ -175,6 +175,38 @@ jobs:
           docker run --rm --network none -v "$PWD:/work" -w /work "$CHECKOV_IMAGE"
           -d infra --framework terraform --external-checks-dir checkov --quiet --compact --skip-download
 
+  # production only gets an image that went to staging first: the tag and digest a pull request sets in the
+  # production values must have been in the staging values on the target branch at some point
+  promotion:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: production image went to staging first
+        run: |
+          file=environments/production/api.yaml
+          if git diff --quiet "origin/$GITHUB_BASE_REF" -- "$file"; then
+            echo "$file is unchanged"; exit 0
+          fi
+          tag=$(sed -n 's/^  tag: "\(.*\)"$/\1/p' "$file")
+          digest=$(sed -n 's/^  digest: "\(.*\)"$/\1/p' "$file")
+          if [ -z "$tag" ] || [ -z "$digest" ]; then
+            echo "$file must pin image.tag and image.digest"; exit 1
+          fi
+          for commit in $(git log --format=%H "origin/$GITHUB_BASE_REF" -- environments/staging/api.yaml); do
+            staging=$(git show "$commit:environments/staging/api.yaml")
+            if grep -qxF "  tag: \"$tag\"" <<< "$staging" && grep -qxF "  digest: \"$digest\"" <<< "$staging"; then
+              echo "staging got $tag@$digest in $(git log -1 --format='%h on %cs' "$commit")" | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          done
+          echo "staging never got $tag@$digest, so it can't go to production" | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 1
+
   image:
     needs: [test, secrets, sast, deps, charts]
     runs-on: ubuntu-24.04
