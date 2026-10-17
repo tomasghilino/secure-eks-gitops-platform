@@ -65,6 +65,6 @@ spec:
     - expression: "variables.apiImages.all(i, verifyAttestationSignatures(i, attestations.provenance, [attestors.ci]) > 0)"
       message: the api image has no provenance signed with the ci key
     - expression: >-
-        variables.apiImages.all(i, extractPayload(i, attestations.provenance).buildDefinition.externalParameters.workflow.repository == 'https://github.com/tomasghilino/secure-eks-gitops-platform'
-        && extractPayload(i, attestations.provenance).buildDefinition.externalParameters.workflow.ref == 'refs/heads/dev')
+        variables.apiImages.all(i, extractPayload(i, attestations.provenance).predicate.buildDefinition.externalParameters.workflow.repository == 'https://github.com/tomasghilino/secure-eks-gitops-platform'
+        && extractPayload(i, attestations.provenance).predicate.buildDefinition.externalParameters.workflow.ref == 'refs/heads/dev')
       message: the api image was not built by this repository's ci from branch dev
