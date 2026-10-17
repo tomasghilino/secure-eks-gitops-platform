@@ -27,3 +27,17 @@ spec:
   validations:
     - expression: "object.spec.?automountServiceAccountToken.orValue(true) == false"
       message: pods must set automountServiceAccountToken to false
+---
+# only the api image, pinned to a commit and a digest, plus the images listed in values. the api image may name
+# any ecr registry here because verify-api-image then demands our signature, so a copy elsewhere is still denied
+apiVersion: policies.kyverno.io/v1
+kind: NamespacedValidatingPolicy
+metadata:
+  name: restrict-image-sources
+spec:
+  {{- include "baseline.podPolicySpec" . | nindent 2 }}
+  validations:
+    - expression: >-
+        variables.containers.all(c, c.image in {{ toJson .Values.allowedImages }} ||
+        c.image.matches('^([0-9]{12}[.]dkr[.]ecr[.]us-east-1[.]amazonaws[.]com/)?segp-api:[0-9a-f]{40}@sha256:[0-9a-f]{64}$'))
+      message: only the api image pinned to a commit and a digest, or an image listed in the baseline values, may run here

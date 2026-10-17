@@ -8,6 +8,11 @@ kyverno:
   # Audit only records violations in policy reports; Deny rejects them
   action: Deny
 
+# the only images allowed besides the api's own, by exact digest
+allowedImages:
+  # the database setup job of the api chart (charts/api values database.setup.image)
+  - postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+
 # a managed database (rds): external secrets copies its credentials from aws secrets manager
 database:
   enabled: false
