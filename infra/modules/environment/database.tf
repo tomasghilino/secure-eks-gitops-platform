@@ -67,10 +67,12 @@ resource "aws_db_parameter_group" "main" {
     value = "0"
   }
 
-  # already the default since postgres 15 on rds, stated so a changed default can't open plain connections
+  # already the default since postgres 15 on rds, stated so a changed default can't open plain connections;
+  # rds reports it as pending-reboot, and any other apply_method shows up as a change in every plan
   parameter {
-    name  = "rds.force_ssl"
-    value = "1"
+    name         = "rds.force_ssl"
+    value        = "1"
+    apply_method = "pending-reboot"
   }
 }
 
