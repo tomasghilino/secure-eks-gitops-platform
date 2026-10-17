@@ -49,7 +49,7 @@ grafana:
   sidecar:
     image:
       sha: 2912be006f62f9ea080194cf6d3afcd90daead8d101d0ba686a137a849f6a4f6
-  # created by scripts/kind-up.sh, never stored in git
+  # created by scripts/eks-up.sh, never stored in git
   admin:
     existingSecret: grafana-admin
   # by default the sidecars watch every namespace through a ClusterRole that can read every Secret

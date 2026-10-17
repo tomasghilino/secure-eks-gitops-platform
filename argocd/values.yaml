@@ -1,4 +1,4 @@
-# installed by scripts/kind-up.sh, which pins the chart version
+# installed by scripts/eks-up.sh, which pins the chart version
 global:
   image:
     # digest pinned after cosign verified it was signed by the argoproj/argo-cd release workflow

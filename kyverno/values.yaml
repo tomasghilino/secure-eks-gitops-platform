@@ -1,4 +1,4 @@
-# installed by scripts/kind-up.sh, which pins the chart version
+# installed by scripts/eks-up.sh, which pins the chart version
 # every digest was checked with cosign: signed by the kyverno/kyverno release workflow at tag v1.19.1
 admissionController:
   initContainer:

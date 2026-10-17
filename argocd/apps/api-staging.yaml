@@ -20,7 +20,7 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    # the migration hook fails until postgres is ready, so a fresh environment needs a few attempts
+    # the database hooks fail until external secrets has copied the credentials, so a fresh environment needs a few attempts
     retry:
       limit: 5
       backoff:
