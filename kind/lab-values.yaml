@@ -1,0 +1,8 @@
+# the api in the kind lab (scripts/kind-up.sh): built on the laptop and connected to the in-cluster postgres chart
+# with the chart defaults; there is no prometheus and no collector in the lab
+metrics:
+  # the ServiceMonitor and PrometheusRule need the prometheus operator's CRDs
+  enabled: false
+
+traces:
+  endpoint: ""
