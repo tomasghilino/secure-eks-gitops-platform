@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Tears down staging on EKS without leaving anything billable behind. The volumes behind PVCs and the
+# Tears down an environment on EKS without leaving anything billable behind. The volumes behind PVCs and the
 # load balancers behind services are created by Kubernetes, not terraform, so they go first.
+# Usage: ./scripts/eks-down.sh [staging|production]   (staging by default)
 # Terraform shows its plan and asks before destroying; AUTO_APPROVE=1 skips the question.
 set -euo pipefail
 
-ENV=staging
+ENV=${1:-staging}
+case "$ENV" in staging | production) ;; *) echo "usage: $0 [staging|production]" >&2; exit 1 ;; esac
 CLUSTER=segp-$ENV
 export AWS_PROFILE=segp
 export AWS_REGION=us-east-1

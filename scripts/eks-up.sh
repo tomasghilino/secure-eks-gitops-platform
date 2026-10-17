@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Brings up staging on EKS: network and cluster with terraform, kubectl access, Argo CD and its bootstrap.
+# Brings up an environment on EKS: network and cluster with terraform, kubectl access, Argo CD and its bootstrap.
+# Usage: ./scripts/eks-up.sh [staging|production]   (staging by default)
 # Terraform shows its plan and asks before applying; AUTO_APPROVE=1 skips the question.
 # Safe to run again on a running environment; it only creates what is missing.
 set -euo pipefail
 
-ENV=staging
+ENV=${1:-staging}
+case "$ENV" in staging | production) ;; *) echo "usage: $0 [staging|production]" >&2; exit 1 ;; esac
 CLUSTER=segp-$ENV
 ARGOCD_CHART_VERSION=10.9.7
 KYVERNO_CHART_VERSION=3.9.1
@@ -71,7 +73,7 @@ if ! kubectl get secret grafana-admin --namespace monitoring >/dev/null 2>&1; th
 fi
 
 echo "==> bootstrap"
-kubectl apply -f argocd/bootstrap-staging.yaml
+kubectl apply -f "argocd/bootstrap-$ENV.yaml"
 kubectl wait application root --namespace argocd --for=jsonpath='{.status.sync.status}'=Synced --timeout=300s
 kubectl wait application --all --namespace argocd --for=jsonpath='{.status.health.status}'=Healthy --timeout=900s
 kubectl get applications --namespace argocd
@@ -90,5 +92,5 @@ Grafana UI:
 Admin password:
   kubectl get secret grafana-admin -n monitoring -o jsonpath="{.data.admin-password}" | base64 -d
 
-When done: ./scripts/eks-down.sh
 EOF
+echo "When done: ./scripts/eks-down.sh $ENV"
