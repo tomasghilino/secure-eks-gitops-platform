@@ -1,0 +1,70 @@
+# every api image, from any ecr registry, must be signed with the ci's kms key and carry the sbom and the
+# provenance ci attached, and the provenance must say it was built from this repository's dev branch.
+# files/cosign.pub is a copy of the key at the repository root; ci fails if they differ
+apiVersion: policies.kyverno.io/v1
+kind: NamespacedImageValidatingPolicy
+metadata:
+  name: verify-api-image
+spec:
+  validationActions:
+    - {{ .Values.kyverno.action }}
+  failurePolicy: Fail
+  # each check reads the registry, which takes longer than the default 10 seconds on a cold cache
+  webhookConfiguration:
+    timeoutSeconds: 20
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  # pods only: deployments name the image without its registry, which use-ecr-registry adds to each pod
+  autogen:
+    podControllers:
+      controllers: []
+  # admission only: a background scan would need registry access for the reports controller too
+  evaluation:
+    background:
+      enabled: false
+  matchImageReferences:
+    - glob: "*.dkr.ecr.us-east-1.amazonaws.com/segp-api*"
+  # kyverno's own pod identity role, which can only read the api repository
+  credentials:
+    providers: [amazon]
+  validationConfigurations:
+    # git already pins every image by digest, so kyverno only checks that there is one
+    mutateDigest: false
+    verifyDigest: true
+    required: true
+  variables:
+    - name: apiImages
+      expression: >-
+        (images.containers + images.?initContainers.orValue([])).filter(i, i.contains('.dkr.ecr.') && i.contains('/segp-api'))
+  attestors:
+    - name: ci
+      cosign:
+        key:
+          data: |
+            {{- .Files.Get "files/cosign.pub" | trim | nindent 12 }}
+        # signed without rekor while the repository is private, so there is no transparency log entry to check
+        ctlog:
+          insecureIgnoreTlog: true
+          insecureIgnoreSCT: true
+  attestations:
+    - name: sbom
+      intoto:
+        type: https://cyclonedx.org/bom
+    - name: provenance
+      intoto:
+        type: https://slsa.dev/provenance/v1
+  validations:
+    - expression: "variables.apiImages.all(i, verifyImageSignatures(i, [attestors.ci]) > 0)"
+      message: the api image is not signed with the ci key
+    - expression: "variables.apiImages.all(i, verifyAttestationSignatures(i, attestations.sbom, [attestors.ci]) > 0)"
+      message: the api image has no sbom signed with the ci key
+    - expression: "variables.apiImages.all(i, verifyAttestationSignatures(i, attestations.provenance, [attestors.ci]) > 0)"
+      message: the api image has no provenance signed with the ci key
+    - expression: >-
+        variables.apiImages.all(i, extractPayload(i, attestations.provenance).buildDefinition.externalParameters.workflow.repository == 'https://github.com/tomasghilino/secure-eks-gitops-platform'
+        && extractPayload(i, attestations.provenance).buildDefinition.externalParameters.workflow.ref == 'refs/heads/dev')
+      message: the api image was not built by this repository's ci from branch dev

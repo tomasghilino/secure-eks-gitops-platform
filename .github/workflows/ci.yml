@@ -127,6 +127,9 @@ jobs:
           helm template baseline charts/baseline --namespace staging --show-only templates/kyverno-policies.yaml > rendered/kyverno-policies.yaml
           docker run --rm -v "$PWD:/work" -w /work "$KYVERNO_CLI" apply rendered/kyverno-policies.yaml --resource rendered/api-staging.yaml
           docker run --rm -v "$PWD:/work" -w /work "$KYVERNO_CLI" apply rendered/kyverno-policies.yaml --resource rendered/api-production.yaml
+      # the cluster trusts the copy inside the baseline chart; it must be the key ci signs with
+      - name: signing key copy
+        run: cmp cosign.pub charts/baseline/files/cosign.pub
       # an alert that never fires is worse than none, so the rules have unit tests like the code
       - name: alert rules
         env:
