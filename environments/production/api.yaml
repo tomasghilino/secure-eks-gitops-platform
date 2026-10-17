@@ -3,8 +3,8 @@ replicaCount: 2
 # promoted from staging by pull request (scripts/promote.sh): the tag and digest staging got, built, scanned and
 # signed by ci; the registry is added in the cluster
 image:
-  tag: "750de9aa1357afb77dc163ed924c115d0fc167df"
-  digest: "sha256:eec81819d13b5defbeb7165e8fa36acc933f4caa3b563a8a2047e1e14a5d4b44"
+  tag: "9f59013a2c850448f20a20b3cd9114067d9a114e"
+  digest: "sha256:f46ab08d95f101121e3d75cb937d56d9ebfffb72a4e03ce0d589a2885353c343"
 
 # rds: the host and both logins come from secrets manager through external secrets (baseline chart)
 database:
