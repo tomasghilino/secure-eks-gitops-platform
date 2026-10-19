@@ -1,0 +1,91 @@
+# promtool test rules tests/alerts/falco.test.yaml
+# the rules are taken from falco/manifests/prometheusrule.yaml by the ci charts job
+rule_files:
+  - ../../rendered/falco-rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  - name: a warning rule matches for the first time
+    interval: 1m
+    input_series:
+      # the counter does not exist until the first match, and then starts at 1
+      - series: 'falcosecurity_falco_rules_matches_total{priority="4", rule_name="Find AWS Credentials", source="syscall"}'
+        values: '_x10 1x20'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: FalcoWarningEvent
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: FalcoWarningEvent
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              priority: "4"
+              rule_name: Find AWS Credentials
+            exp_annotations:
+              summary: "Falco: Find AWS Credentials"
+              description: >-
+                Falco matched "Find AWS Credentials" in the last 5 minutes. The container, command and user
+                are in Loki: {k8s_namespace_name="falco"} |= "Find AWS Credentials"
+      # nothing new for more than 5 minutes: the alert resolves
+      - eval_time: 20m
+        alertname: FalcoWarningEvent
+        exp_alerts: []
+
+  - name: a warning rule that already matched matches again
+    interval: 1m
+    input_series:
+      - series: 'falcosecurity_falco_rules_matches_total{priority="4", rule_name="Read sensitive file untrusted", source="syscall"}'
+        values: '3x10 4x10'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: FalcoWarningEvent
+        exp_alerts: []
+      - eval_time: 13m
+        alertname: FalcoWarningEvent
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              priority: "4"
+              rule_name: Read sensitive file untrusted
+            exp_annotations:
+              summary: "Falco: Read sensitive file untrusted"
+              description: >-
+                Falco matched "Read sensitive file untrusted" in the last 5 minutes. The container, command and user
+                are in Loki: {k8s_namespace_name="falco"} |= "Read sensitive file untrusted"
+
+  - name: a critical rule pages as critical, not as warning
+    interval: 1m
+    input_series:
+      - series: 'falcosecurity_falco_rules_matches_total{priority="2", rule_name="Linux Kernel Module Injection Detected", source="syscall"}'
+        values: '_x5 1x10'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: FalcoCriticalEvent
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              priority: "2"
+              rule_name: Linux Kernel Module Injection Detected
+            exp_annotations:
+              summary: "Falco: Linux Kernel Module Injection Detected"
+              description: >-
+                Falco matched "Linux Kernel Module Injection Detected" in the last 5 minutes. The container, command and user
+                are in Loki: {k8s_namespace_name="falco"} |= "Linux Kernel Module Injection Detected"
+      - eval_time: 7m
+        alertname: FalcoWarningEvent
+        exp_alerts: []
+
+  - name: notice rules stay in loki and page nobody
+    interval: 1m
+    input_series:
+      - series: 'falcosecurity_falco_rules_matches_total{priority="5", rule_name="Terminal shell in container", source="syscall"}'
+        values: '_x5 1x10'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: FalcoWarningEvent
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: FalcoCriticalEvent
+        exp_alerts: []

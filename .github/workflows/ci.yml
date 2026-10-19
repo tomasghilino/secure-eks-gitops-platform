@@ -138,8 +138,11 @@ jobs:
         run: |
           helm template api charts/api --namespace staging --values environments/staging/api.yaml \
             --show-only templates/prometheusrule.yaml | awk '/^spec:/{f=1;next} f{sub(/^  /,"");print}' > rendered/api-rules.yaml
-          docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool "$PROMETHEUS_IMAGE" check rules rendered/api-rules.yaml
-          docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool "$PROMETHEUS_IMAGE" test rules tests/alerts/api.test.yaml
+          awk '/^spec:/{f=1;next} f{sub(/^  /,"");print}' falco/manifests/prometheusrule.yaml > rendered/falco-rules.yaml
+          for rules in api falco; do
+            docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool "$PROMETHEUS_IMAGE" check rules "rendered/$rules-rules.yaml"
+            docker run --rm -v "$PWD:/work" -w /work --entrypoint /bin/promtool "$PROMETHEUS_IMAGE" test rules "tests/alerts/$rules.test.yaml"
+          done
 
   terraform:
     runs-on: ubuntu-24.04

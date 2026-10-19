@@ -1,0 +1,41 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: falco
+  labels:
+    # prometheus only picks up rules with this label
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: falco
+      rules:
+        # falco priorities are syslog levels: 0 emergency, 1 alert, 2 critical, 3 error, 4 warning, 5 notice.
+        # a rule's counter may appear only on its first match, already at 1: increase() sees 0 there, so the
+        # second half catches series that did not exist 5 minutes ago. each half filters "> 0" on its own,
+        # because "or" drops right-hand series whose labels the left side already has, even at 0
+        - alert: FalcoCriticalEvent
+          expr: >-
+            (sum by (rule_name, priority) (increase(falcosecurity_falco_rules_matches_total{priority=~"[0-2]"}[5m])) > 0)
+            or
+            (sum by (rule_name, priority) (falcosecurity_falco_rules_matches_total{priority=~"[0-2]"}
+              unless falcosecurity_falco_rules_matches_total{priority=~"[0-2]"} offset 5m) > 0)
+          labels:
+            severity: critical
+          annotations:
+            summary: "Falco: {{ $labels.rule_name }}"
+            description: >-
+              Falco matched "{{ $labels.rule_name }}" in the last 5 minutes. The container, command and user
+              are in Loki: {k8s_namespace_name="falco"} |= "{{ $labels.rule_name }}"
+        - alert: FalcoWarningEvent
+          expr: >-
+            (sum by (rule_name, priority) (increase(falcosecurity_falco_rules_matches_total{priority=~"[34]"}[5m])) > 0)
+            or
+            (sum by (rule_name, priority) (falcosecurity_falco_rules_matches_total{priority=~"[34]"}
+              unless falcosecurity_falco_rules_matches_total{priority=~"[34]"} offset 5m) > 0)
+          labels:
+            severity: warning
+          annotations:
+            summary: "Falco: {{ $labels.rule_name }}"
+            description: >-
+              Falco matched "{{ $labels.rule_name }}" in the last 5 minutes. The container, command and user
+              are in Loki: {k8s_namespace_name="falco"} |= "{{ $labels.rule_name }}"

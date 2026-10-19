@@ -19,6 +19,8 @@ spec:
     - repoURL: git@github.com:tomasghilino/secure-eks-gitops-platform.git
       targetRevision: dev
       ref: values
+      # the alert rules
+      path: falco/manifests
   destination:
     server: https://kubernetes.default.svc
     namespace: falco
