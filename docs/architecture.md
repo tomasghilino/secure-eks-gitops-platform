@@ -1,6 +1,6 @@
 # Architecture
 
-Here's how the pieces fit together. The API runs in two EKS clusters, staging and production, each in its own VPC and built from the same Terraform module. GitHub Actions builds, scans and signs the image, but never touches a cluster. Argo CD runs inside each cluster and pulls what Git says it should run. A few long-lived resources are shared by both environments: the Terraform state bucket, the image registry, the signing key and the role CI uses.
+The API runs in two EKS clusters, staging and production, each in its own VPC. GitHub Actions builds, scans and signs the image but never touches a cluster. Argo CD runs inside each cluster and pulls whatever Git says should run.
 
 ```mermaid
 flowchart LR
@@ -33,111 +33,61 @@ flowchart LR
     eso -->|Pod Identity| secrets[Secrets Manager]
 ```
 
-## Terraform layout
+## Infrastructure
 
-The infrastructure is split into stacks by how long things live. Each stack has its own state under its own key in one S3 bucket.
+The Terraform is split by how long things live. `infra/bootstrap` holds the state bucket and is created once. `infra/shared` holds what both environments use: the ECR repository, the cosign signing key, the role CI assumes and a few KMS keys. It costs about 2 to 3 USD a month. `infra/staging` and `infra/production` each call the same module, `infra/modules/environment`, and I create and destroy them every working session. The only differences are the name, the address range and the nodes: spot instances for staging, on-demand `t3.large` for production.
 
-| Stack | What's in it | How long it lives |
-|---|---|---|
-| `infra/bootstrap` | S3 state bucket and its KMS key | Created once |
-| `infra/shared` | ECR repository, cosign signing key, GitHub OIDC provider and CI role, flow log bucket, the KMS key for Kubernetes secrets, EBS encryption by default | Long lived, about 2 to 3 USD a month |
-| `infra/staging`, `infra/production` | Backend, provider and one call to the environment module | Created and destroyed every working session |
-| `infra/modules/environment` | The 56 resources of one environment: network, EKS, node group, add-ons, Pod Identity roles, RDS, secrets and logs | Takes a name, a /16, the node capacity type and instance types |
+I wrote the module with plain AWS resources instead of the community EKS and VPC modules. It's more code, but Checkov can scan all of it, and I know what every line does.
 
-The two environments only differ in their name, their address range (10.20.0.0/16 and 10.30.0.0/16) and their nodes: staging runs on spot instances across five instance types, production on on-demand `t3.large`. They read the shared stack's outputs through `terraform_remote_state`, so nothing is copied by hand. The state bucket is versioned and encrypted with its own KMS key, and Terraform locks it with a lock file in S3.
+Each VPC spans two availability zones. The nodes and pods sit in private subnets and go out through a single NAT gateway, because Argo CD needs GitHub and the charts pull images from public registries. RDS sits in its own subnets with no route to the internet. There's no load balancer, and VPC flow logs record every connection.
 
-I wrote the module with plain AWS resources instead of the community EKS and VPC modules. It's more code, but Checkov scans every resource without downloading anything, and I know what each line does.
+The clusters run Kubernetes 1.35. The API endpoint only answers my IP address, my SSO role is the only admin (through an EKS access entry), and Kubernetes Secrets are encrypted with a KMS key. Pods can't reach the node's instance metadata, so they can't borrow its IAM role. One thing I only caught by testing: the VPC CNI silently ignores NetworkPolicies until you turn that feature on.
 
-## Network
+## From commit to cluster
 
-Each VPC spans two availability zones with three kinds of subnets:
+```mermaid
+flowchart LR
+    push([git push]) --> ci
+    subgraph ci [CI, every push and pull request]
+        direction TB
+        checks[Tests, Gitleaks, Semgrep,<br/>Trivy, chart and policy checks,<br/>Terraform checks] --> build[Build, smoke test,<br/>Trivy image scan]
+    end
+    ci -->|dev only| publish[Push to ECR, sign,<br/>attest SBOM and provenance]
+    publish --> staging[Commit the digest<br/>to the staging values]
+    staging --> argo1[Argo CD syncs staging]
+    argo1 --> pr{Promotion<br/>pull request}
+    pr -->|merged| argo2[Argo CD syncs production]
+```
 
-| Subnets | What runs there | Route to the internet |
-|---|---|---|
-| Public, two /24 | The NAT gateway | Internet gateway |
-| Private, two /19 | Nodes and pods | Through the NAT gateway |
-| Database, two /24 | RDS | None |
+The job that builds the image runs code downloaded by npm, so it never gets AWS credentials. A separate publish job, which only runs on pushes to `dev`, takes the exact tarball that was scanned, pushes it to ECR and signs it with the KMS key. The SBOM and the provenance are attached as signed attestations, and the job verifies all three against the public key in the repo before it finishes.
 
-The private subnets are large because the VPC CNI gives every pod a real VPC address. The nodes need outbound internet access: Argo CD reads the repository on GitHub, and the platform charts pull images from public registries. Project 1 used VPC endpoints instead of a NAT gateway, but that only works when everything you talk to is an AWS service. There's a single NAT gateway in one zone to save the cost of a second one, plus the free S3 gateway endpoint. If that zone fails, the nodes lose internet access, which is acceptable here.
+Argo CD watches the `dev` branch. Environments are folders, not branches: `environments/staging` and `environments/production` hold the values each one gets, including the image digest. Self-heal is on, so a manual change in the cluster gets put back within seconds. Every app belongs to an Argo CD project that limits what it can deploy and where, and the catch-all `default` project allows nothing.
 
-Nothing in the VPC is reachable from the internet. There's no load balancer, and the API is reached with `kubectl port-forward`. The default security group has no rules, and VPC flow logs record every accepted and rejected connection into the shared log bucket.
+Deploying to staging is a commit. Production only changes through a pull request that copies the staging digest, and rolling back is reverting that pull request.
 
-## Cluster
+## Inside the cluster
 
-EKS runs Kubernetes 1.35, a version in standard support until March 2027 (extended support costs six times more per hour). The API server has a public endpoint that only answers the admin's IP address, looked up when the stack is applied and never committed, plus a private endpoint for the nodes. Access uses EKS access entries instead of the old `aws-auth` ConfigMap. My SSO role gets cluster admin through an explicit entry, instead of the automatic admin rights EKS gives whoever created the cluster. Kubernetes Secrets are encrypted with a KMS key, and all five control plane log types go to CloudWatch for seven days.
+The `staging` and `production` namespaces enforce the `restricted` Pod Security level: no root, no privilege escalation, no Linux capabilities. They also deny all network traffic by default, and the API can only reach its database and the trace collector. Apart from `kube-system`, only two namespaces allow privileged pods: one for Falco and one for the node agents (the log collector and the node exporter), because they read from the nodes themselves.
 
-A managed node group runs two nodes. Their launch template requires IMDSv2 with a hop limit of 1, so pods can't reach the node's instance metadata or borrow the node role. The add-ons (VPC CNI, kube-proxy, CoreDNS, EBS CSI driver and the Pod Identity agent) are pinned to the versions EKS marks as default for 1.35, so every session builds the same cluster. The VPC CNI ignores NetworkPolicies unless network policy support is switched on, which I only noticed by testing it ([details](evidence/platform-on-eks.md)).
+Kyverno checks every pod in those namespaces before it starts:
 
-Each namespace gets a Pod Security level:
+- only the API image is allowed, pinned to a commit and a digest
+- that image must be signed with the CI's key and carry a signed SBOM and a signed provenance from this repo's `dev` branch
+- containers added with `kubectl debug` follow the same rules
+- the ECR address gets filled in at runtime, so the account ID never lands in Git
 
-| Level | Namespaces | Why |
-|---|---|---|
-| restricted | `staging`, `production`, `monitoring`, `external-secrets` | No root, no privilege escalation, no capabilities, seccomp required |
-| privileged | `monitoring-agents`, `falco` | The log collector and Falco read host paths on every node |
+Kyverno runs three replicas, because its policies fail closed: if it went down, no new pod could start.
 
-## Delivery with Argo CD
+Nothing uses an access key. People sign in through SSO, CI uses GitHub's OIDC token, and every pod that talks to AWS gets its own Pod Identity role, valid only for its service account, namespace and cluster. Kyverno can only read the API images, and External Secrets can only read its own environment's two database secrets.
 
-Argo CD runs in each cluster and follows the `dev` branch. The bootstrap applies a single root Application, which deploys everything under `argocd/apps`. The staging cluster skips the `*-production.yaml` apps and the production cluster skips the `*-staging.yaml` ones. Argo CD reads the private repository with a read-only deploy key, polls it every few minutes, and has self-heal on, so a manual change to the cluster is put back within seconds ([demo](evidence/drift-self-heal.md)).
+## Database and secrets
 
-Environments are folders, not branches. `environments/staging/api.yaml` and `environments/production/api.yaml` hold the values each environment's API gets, including the image tag and digest. Deploying to staging is a commit that changes the staging values. Production only changes through a pull request that copies the staging tag and digest, opened by `scripts/promote.sh`. Rolling back is reverting that pull request ([demo](evidence/promotion-and-rollback.md)).
+Each environment has RDS PostgreSQL 17 with encrypted storage and no public address. The server refuses connections without TLS, and the API checks the server's certificate. Terraform generates the passwords during the apply without ever writing them to its state, Secrets Manager keeps them, and External Secrets copies them into the cluster. The API logs in as a role that owns its tables but can't administer anything.
 
-Every Application belongs to an AppProject, which limits what it may deploy and where:
+## Observability and runtime detection
 
-| Project | Deploys |
-|---|---|
-| `platform` | Only the Applications and AppProjects themselves |
-| `baseline` | Each environment's namespace, network policies, default service account, Kyverno policies, External Secrets objects and the viewers role binding |
-| `segp` | The API: Deployments, Services, Jobs, service accounts, network policies and monitoring rules, in `staging` and `production` only |
-| `external-secrets`, `observability`, `runtime-security` | One upstream chart each, with the cluster-wide objects that chart needs |
-| `default` | Nothing. Argo CD's catch-all project is emptied on purpose |
+The API sends traces and logs through the OpenTelemetry Collector to Tempo and Loki, and exposes metrics for Prometheus. Grafana has a dashboard for it, kept as JSON in the repo. The alert rules have unit tests in CI, so a broken threshold fails a pull request. Alertmanager has no receiver yet, so nothing pages anyone.
 
-The split keeps the app chart from granting itself permissions or creating namespaces. Sync waves set the order on a fresh cluster: projects first, then External Secrets, then the guardrails and the monitoring stack, then the API and Falco.
+Falco watches system calls on every node and alerts on things like reading `/etc/shadow` or searching for AWS keys. I tuned it so the controllers that talk to the Kubernetes API by design don't flood it, and added a stricter rule for the environment namespaces.
 
-## Admission control
-
-Kyverno checks every pod in the environment namespaces before it starts. It runs three replicas, because its policies fail closed: with Kyverno down, no new pod would start in staging or production. The policies come from the baseline chart, so each environment carries its own copy:
-
-| Policy | What it does |
-|---|---|
-| `restrict-image-sources` | Only the API image pinned to a full commit SHA and a digest, or an image listed in the baseline values by exact digest |
-| `use-ecr-registry` | Adds the ECR address to the API image when a pod is created. Git never contains the registry, because the address holds the account ID |
-| `verify-api-image` | The API image must be signed with the CI's KMS key and carry a CycloneDX SBOM and a SLSA provenance signed with the same key, and the provenance must say it was built from this repository's `dev` branch |
-| `restrict-debug-container-images` | The same image rules for containers added with `kubectl debug` |
-| `disallow-latest-tag`, `require-memory-limit`, `disallow-service-account-token` | Basic hygiene for every pod |
-
-Kyverno reads signatures from ECR with its own Pod Identity role, which can only read the `segp-api` repository. CI runs the validating policies with the Kyverno CLI against the rendered charts, so most violations fail a pull request before they reach a cluster. The signature check needs the registry, so it only runs in the cluster.
-
-## Identities
-
-Nothing in this project uses an access key. People sign in through IAM Identity Center, CI uses GitHub's OIDC token, and pods use EKS Pod Identity.
-
-| Role | Used by | Allowed to |
-|---|---|---|
-| `segp-github-ci` | GitHub Actions, only for pushes to `dev` in this repository | Push to `segp-api` and sign with the cosign key |
-| `segp-<env>-cluster` | The EKS control plane | Run the cluster and encrypt Secrets with its KMS key |
-| `segp-<env>-node` | The worker nodes | Join the cluster and pull images |
-| `segp-<env>-vpc-cni`, `segp-<env>-ebs-csi` | The network and storage add-ons | Manage pod addresses and EBS volumes |
-| `segp-<env>-external-secrets` | External Secrets in that cluster | Read that environment's two database secrets |
-| `segp-<env>-kyverno` | Kyverno's admission controller | Read images and their signatures from `segp-api` |
-
-Pod Identity tags every session with the cluster, namespace and service account, and each role's trust policy requires all three. A pod in staging can't use production's roles, or another service account's ([demo](evidence/secrets-across-environments.md)).
-
-## The database and its secrets
-
-Each environment has RDS PostgreSQL 17 on a `db.t4g.micro` in the database subnets, with encrypted storage and no public address. The server refuses connections without TLS, and the API connects with `verify-full`, checking the certificate against the RDS CA bundle.
-
-Terraform generates two passwords during the apply with ephemeral resources and writes them with write-only arguments, so they never reach the state. Secrets Manager keeps them as `<env>/database/admin` and `<env>/database/api`. External Secrets copies them into Kubernetes Secrets. Before each deploy, a setup hook uses the admin login to create the `api` role, which owns the tables but can't administer anything, and the migration job runs as `api`. A parameter group stops `pg_stat_statements` from keeping `ALTER ROLE ... PASSWORD` statements, a leak I found while checking the setup ([details](evidence/rds-and-external-secrets.md)).
-
-## Observability
-
-The API is instrumented with OpenTelemetry. It exposes Prometheus metrics, writes JSON logs with the trace ID, and sends traces to a collector that runs on every node. The collector also reads every pod's logs and forwards them to Loki, and sends the traces to Tempo. kube-prometheus-stack provides Prometheus, Alertmanager and Grafana, and the Grafana dashboard for the API is a JSON file in the repository.
-
-The API's alert rules (error rate, latency, no available pods) live in its Helm chart, and promtool unit tests in CI check that they fire when they should and stay quiet when they shouldn't ([drill](evidence/alerts-and-drill.md)). Retention is short, two days for metrics, logs and traces, because the clusters only exist during working sessions. Alertmanager has no receiver yet, so alerts are visible in Alertmanager and Grafana but don't page anyone.
-
-## Runtime detection
-
-Admission control decides what may start. Falco watches what running containers do, through the modern eBPF probe, with four specific capabilities instead of a privileged container. Its rules come inside the pinned image, so nothing is downloaded at runtime. Falco events go to Loki with the full detail, and a counter per rule feeds two Prometheus alerts, one for warnings and one for critical events. The default rules were tuned for this platform: the controllers that talk to the Kubernetes API by design are excluded, and a stricter rule flags any pod in `staging` or `production` that reaches the API, since the API pods have no service account token and no reason to ([demo](evidence/falco-runtime-detection.md)).
-
-## Dependency updates
-
-Renovate opens pull requests into `dev` for every pinned version in the repository: npm packages, base images, CI tool images, GitHub Actions, Helm charts in the Argo CD apps and the scripts, Terraform providers and the kind node image. A version has to be at least seven days old, major versions wait for approval on the dependency dashboard, and versions that must move together are grouped. Every update pull request goes through the same CI as any other change ([details](evidence/renovate.md)).
+Renovate keeps every pinned version current: npm packages, images, GitHub Actions, Helm charts and Terraform providers. A new version has to be a week old, and major versions wait for my approval.

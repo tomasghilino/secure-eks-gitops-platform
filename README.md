@@ -1,23 +1,30 @@
 # Secure EKS GitOps Platform
 
-A Kubernetes platform on AWS that runs a small NestJS API in two EKS clusters, staging and production, and only lets in images it can trace back to its own CI. GitHub Actions tests and scans every commit, then pushes the image to ECR and signs it, along with its SBOM and provenance, using a KMS key. Argo CD deploys from Git, production only changes through a pull request, and Kyverno checks the signature again before any pod starts. The infrastructure is Terraform, and every check below was triggered on purpose at least once.
+A small NestJS API running on two EKS clusters, staging and production, where only images built and signed by my own CI are allowed to run. GitHub Actions tests and scans every commit, pushes the image to ECR and signs it with a KMS key. Argo CD deploys whatever Git says, production only changes through a pull request, and Kyverno checks the signature again before any pod starts. Everything is Terraform, and every check below was triggered on purpose at least once.
 
 ![Architecture overview: GitHub Actions pushes images to ECR and signs them with a KMS key; in each environment's VPC, Argo CD pulls from GitHub, Kyverno verifies the signature in ECR, External Secrets reads Secrets Manager and the cluster reaches RDS over TLS](docs/images/architecture-overview.jpg)
 
 ## Stack
 
-- API: NestJS on Node.js 24 with PostgreSQL 17, instrumented with OpenTelemetry
-- CI: GitHub Actions with OIDC to AWS, Gitleaks, Semgrep, Trivy, Checkov, TFLint, the Kyverno CLI and promtool, every tool pinned by digest or checksum
-- Supply chain: cosign with a KMS key, CycloneDX SBOM and SLSA provenance as signed attestations, Renovate
-- Kubernetes: EKS 1.35, Helm, Argo CD, Kyverno, Pod Security Standards, NetworkPolicies, External Secrets, EKS Pod Identity and Falco
-- Observability: Prometheus, Alertmanager, Grafana, Loki, Tempo and the OpenTelemetry Collector
-- Infrastructure: Terraform with remote state in S3, on AWS VPC, EKS, RDS, ECR, KMS and Secrets Manager
+- API: NestJS and PostgreSQL 17, instrumented with OpenTelemetry
+- CI: GitHub Actions with OIDC to AWS, Gitleaks, Semgrep, Trivy, Checkov and TFLint
+- Supply chain: cosign with a KMS key, CycloneDX SBOM, SLSA provenance and Renovate
+- Kubernetes: EKS, Helm, Argo CD, Kyverno, Pod Security Standards, NetworkPolicies, External Secrets, Pod Identity and Falco
+- Observability: Prometheus, Grafana, Loki, Tempo and the OpenTelemetry Collector
+- Infrastructure: Terraform on AWS (VPC, EKS, RDS, ECR, KMS, Secrets Manager)
 
-## Architecture
+## How it works
 
-Each environment is its own VPC and EKS cluster, built from the same Terraform module. Nodes and pods sit in private subnets behind a NAT gateway, and RDS sits in database subnets with no route to the internet. Nothing has a public address except the cluster's API endpoint, which only answers my IP. There's no load balancer: I reach the API, Argo CD and Grafana with `kubectl port-forward`.
+Each environment has its own VPC and EKS cluster, built from the same Terraform module. The nodes live in private subnets, the database has no route to the internet, and nothing is public except the cluster's API endpoint, which only answers my IP. I reach the API and the dashboards with `kubectl port-forward`.
 
-CI never talks to a cluster. Argo CD runs inside each one and pulls from the repository with a read-only deploy key, so the only way to change what runs is a commit. [docs/architecture.md](docs/architecture.md) has the details.
+CI never touches a cluster. Argo CD runs inside each one and pulls from the repository with a read-only key, so the only way to change what runs is a commit:
+
+1. Every push and pull request runs the tests, secret scanning, static analysis, dependency and image scans, the Helm and policy checks, and the Terraform checks.
+2. On `dev`, a separate job logs in to AWS with OIDC, pushes the exact image that was scanned, and signs it along with its SBOM and provenance.
+3. A commit puts the new image digest in the staging values. Argo CD deploys it, and Kyverno verifies the signature before the pods start.
+4. `scripts/promote.sh` opens a pull request that copies that digest to production, and CI fails it if staging never ran that image. Merging is the approval, and reverting is the rollback.
+
+[docs/architecture.md](docs/architecture.md) has the details.
 
 <details>
 <summary>The architecture as a Mermaid diagram</summary>
@@ -55,28 +62,6 @@ flowchart LR
 
 </details>
 
-## How a change ships
-
-```mermaid
-flowchart LR
-    push([git push]) --> ci
-    subgraph ci [CI, every push and pull request]
-        direction TB
-        checks[Tests, Gitleaks, Semgrep,<br/>Trivy, chart and policy checks,<br/>Terraform checks] --> build[Build, smoke test,<br/>Trivy image scan]
-    end
-    ci -->|dev only| publish[Push to ECR, sign,<br/>attest SBOM and provenance]
-    publish --> staging[Commit the digest<br/>to the staging values]
-    staging --> argo1[Argo CD syncs staging]
-    argo1 --> pr{Promotion<br/>pull request}
-    pr -->|merged| argo2[Argo CD syncs production]
-```
-
-1. Every push and pull request runs the checks above. Any failure stops the build.
-2. On `dev`, a separate job logs in to AWS with OIDC, pushes the exact image that was scanned, and signs it and its attestations.
-3. A commit sets the new tag and digest in `environments/staging/api.yaml`. Argo CD syncs it, and Kyverno verifies the image before the pods start.
-4. `scripts/promote.sh` opens a pull request that copies the staging tag and digest to production. A CI check fails it if staging never ran that image.
-5. Merging is the approval. Rolling back is reverting the pull request.
-
 ## Failures tested on purpose
 
 | What was broken | What caught it |
@@ -84,63 +69,51 @@ flowchart LR
 | An unsigned image, one without an SBOM, and a copy in another account's registry | [Kyverno at admission](docs/evidence/signed-images-at-admission.md) |
 | A production pull request with an image staging never ran | [The promotion check in CI](docs/evidence/promotion-and-rollback.md) |
 | A pull request widening CI's AWS trust to any branch | [A custom Checkov rule, and AWS itself](docs/evidence/github-oidc.md) |
-| Public access opened on the Terraform state bucket | [Checkov](docs/evidence/terraform-ci-gates.md) |
 | A manual `kubectl scale` in production | [Argo CD self-heal](docs/evidence/drift-self-heal.md) |
 | Staging asking for production's database password | [IAM, through Pod Identity](docs/evidence/secrets-across-environments.md) |
-| A database outage | [Alerts, then logs and a trace](docs/evidence/alerts-and-drill.md) |
 | An attacker reading `/etc/shadow` and hunting for AWS keys in a container | [Falco and an alert](docs/evidence/falco-runtime-detection.md) |
-| A debug container with an unapproved image | [A new Kyverno policy, after the bypass worked](docs/evidence/admission-and-rbac-review.md) |
+| A debug container with an unapproved image | [A new Kyverno policy, after the bypass worked](docs/evidence/debug-container-bypass.md) |
 
 ## Security
 
-Nothing uses a stored key. People sign in through SSO, CI gets a one-hour role through GitHub's OIDC token that only works for pushes to `dev`, and each pod that calls AWS gets a Pod Identity role scoped to its service account. Terraform generates the database passwords without writing them to its state, and External Secrets copies them from Secrets Manager into the cluster.
-
-The environment namespaces enforce the `restricted` Pod Security level and deny all traffic by default. Kyverno only admits the API image pinned to a commit and a digest and signed by CI, Argo CD projects limit what each application may deploy, and Falco watches system calls on every node. The [threat model](docs/threat-model.md) goes through each threat, the control that covers it, and the risks accepted on purpose.
+There are no stored keys anywhere. People use SSO, CI gets a one-hour role through OIDC that only works for pushes to `dev`, and each pod that calls AWS gets its own Pod Identity role. The database passwords never touch Git or the Terraform state. Inside the clusters, the environment namespaces reject root and privileged pods and deny all traffic by default, and Falco watches what runs. The [threat model](docs/threat-model.md) covers what's still exposed and why.
 
 ## Design choices
 
 - EKS instead of ECS, to use the Kubernetes-native controls. My previous project ran the same API on ECS Fargate, which is the better fit for a single service.
-- Two clusters from one module. Staging runs on spot nodes, production on on-demand, because a spot interruption there would take half of the API down.
-- Argo CD pulls instead of CI pushing, so CI has no cluster credentials. Environments are folders, not branches.
-- Promotion copies the tag and the digest, so production runs the bytes staging ran, checked twice: in Git by CI, and in the cluster by Kyverno.
-- cosign with a KMS key instead of keyless signing, because GitHub's attestations need a public repository on the free plan and Rekor is a public log. The provenance is honest about being SLSA Build L1.
-- The registry address stays out of Git because it contains the account ID. A Kyverno policy adds it when a pod is created.
-- Renovate instead of Dependabot, which doesn't understand chart versions in Argo CD applications.
-- Both environments are created and destroyed around each working session. Staging costs about 0.30 USD/h and production about 0.40 USD/h.
+- Staging runs on spot nodes and production on on-demand, because a spot interruption there would take half of the API down.
+- Argo CD pulls instead of CI pushing, so CI has no cluster credentials at all.
+- Production gets the exact digest staging ran, checked once by CI and again by Kyverno.
+- cosign with a KMS key instead of keyless signing, because GitHub's attestations need a public repository on the free plan. The provenance is SLSA Build L1, since my own workflow writes it.
+- Both environments are created and destroyed each working session. Staging costs about 0.30 USD/h and production about 0.40 USD/h.
 
 ## What would change in production
 
 - Separate AWS accounts for staging and production
-- Branch protection with required checks, which needs a public repository or a paid plan
-- Keyless signing and GitHub's attestations, so the provenance doesn't come from my own workflow
-- An ingress with ACM and a WAF, and a private-only cluster endpoint
-- SSO for Argo CD and Grafana, and an Alertmanager receiver that pages someone
-- Loki and Tempo on S3, Multi-AZ RDS with deletion protection, and a NAT gateway per zone
+- Branch protection with required checks
+- Keyless signing with GitHub's attestations
+- An ingress with TLS and a WAF instead of port-forwarding
+- SSO for Argo CD and Grafana, and alerts that page someone
 
 ## Running it
-
-Locally:
 
 ```bash
 cp .env.example .env
 docker compose up --build
-curl http://127.0.0.1:3000/health
 ```
 
-`scripts/kind-up.sh` runs the API on a local kind cluster. On AWS, apply `infra/bootstrap` and `infra/shared` once, then `./scripts/eks-up.sh staging` creates an environment in 20 to 30 minutes and `./scripts/eks-down.sh staging` removes it. The [deployment guide](docs/deployment.md) has the exact steps, promotion, rollback and costs.
+`scripts/kind-up.sh` runs the API on a local kind cluster. On AWS, `./scripts/eks-up.sh staging` builds an environment in 20 to 30 minutes and `./scripts/eks-down.sh staging` removes it. The [deployment guide](docs/deployment.md) has the full steps.
 
 ## Repository
 
 ```text
-app/            NestJS API, tests, Dockerfile and migrations
-charts/         Helm charts: api, baseline (namespace guardrails and policies), postgres (kind only)
-environments/   Values per environment, including the image each one runs
-argocd/         Argo CD values, bootstrap per cluster, applications and projects
-infra/          Terraform: bootstrap, shared, the environment module, staging and production
-observability/  Monitoring stack values and dashboards
-falco/          Falco values, tuning and alert rules
-tests/alerts/   promtool unit tests for the alert rules
-checkov/        Custom Checkov rule for OIDC trust policies
+app/            NestJS API, tests and Dockerfile
+charts/         Helm charts for the API and the namespace guardrails
+environments/   The values, and the image, each environment runs
+argocd/         Argo CD applications and projects
+infra/          Terraform
+observability/  Monitoring stack
+falco/          Runtime detection
 scripts/        eks-up, eks-down, promote and the kind lab
 docs/           Architecture, threat model, deployment guide and evidence
 ```
