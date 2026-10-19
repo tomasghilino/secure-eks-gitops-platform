@@ -17,8 +17,6 @@ spec:
   namespaceResourceWhitelist:
     - group: apps
       kind: Deployment
-    - group: apps
-      kind: StatefulSet
     - group: ""
       kind: Service
     - group: ""
