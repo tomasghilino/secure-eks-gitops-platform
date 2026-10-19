@@ -125,8 +125,11 @@ jobs:
           KYVERNO_CLI: reg.kyverno.io/kyverno/kyverno-cli:v1.19.1@sha256:ced7b2be0b04250cabfe695f15307f69eb715fe23234816388af4f3812915b2a
         run: |
           helm template baseline charts/baseline --namespace staging --show-only templates/kyverno-policies.yaml > rendered/kyverno-policies.yaml
-          docker run --rm -v "$PWD:/work" -w /work "$KYVERNO_CLI" apply rendered/kyverno-policies.yaml --resource rendered/api-staging.yaml
-          docker run --rm -v "$PWD:/work" -w /work "$KYVERNO_CLI" apply rendered/kyverno-policies.yaml --resource rendered/api-production.yaml
+          for env in staging production; do
+            docker run --rm -v "$PWD:/work" -w /work "$KYVERNO_CLI" apply rendered/kyverno-policies.yaml               --resource "rendered/api-$env.yaml" | tee "rendered/kyverno-$env.txt"
+            # a policy change that stops matching the rendered resources would otherwise pass with nothing checked
+            grep -q 'pass: [1-9]' "rendered/kyverno-$env.txt" || { echo "no kyverno rule was evaluated for $env"; exit 1; }
+          done
       # the cluster trusts the copy inside the baseline chart; it must be the key ci signs with
       - name: signing key copy
         run: cmp cosign.pub charts/baseline/files/cosign.pub
