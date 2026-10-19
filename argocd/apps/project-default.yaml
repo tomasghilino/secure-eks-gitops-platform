@@ -1,0 +1,17 @@
+# argo cd creates the default project open to every repository, cluster and kind; emptied here, an application
+# that names no project, or names this one, can deploy nothing, so every app has to use a project that limits it
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+    # argo cd recreates the default project if it disappears, so git never deletes it
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  description: Argo CD's catch-all project, locked down; use one of the other projects
+  sourceRepos: []
+  destinations: []
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist: []
