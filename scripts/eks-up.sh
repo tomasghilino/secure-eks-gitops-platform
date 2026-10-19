@@ -8,7 +8,9 @@ set -euo pipefail
 ENV=${1:-staging}
 case "$ENV" in staging | production) ;; *) echo "usage: $0 [staging|production]" >&2; exit 1 ;; esac
 CLUSTER=segp-$ENV
+# renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
 ARGOCD_CHART_VERSION=10.9.7
+# renovate: datasource=helm depName=kyverno registryUrl=https://kyverno.github.io/kyverno
 KYVERNO_CHART_VERSION=3.9.1
 REPO_URL=git@github.com:tomasghilino/secure-eks-gitops-platform.git
 DEPLOY_KEY_FILE=${DEPLOY_KEY_FILE:-$HOME/.ssh/segp-argocd}

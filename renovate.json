@@ -1,0 +1,99 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Dependency update pull requests into dev. Every version waits 7 days after its release, and a human merges each pull request.",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigestsToSemver"
+  ],
+  "timezone": "America/Argentina/Buenos_Aires",
+  "labels": [
+    "dependencies"
+  ],
+  "semanticCommits": "enabled",
+  "minimumReleaseAge": "7 days",
+  "internalChecksFilter": "strict",
+  "prConcurrentLimit": 5,
+  "argocd": {
+    "managerFilePatterns": [
+      "/^argocd/apps/.+\\.yaml$/"
+    ]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Images pinned as name:tag@digest where no built-in manager looks: ci tools, the baseline allowlist, kind nodes",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/.+\\.ya?ml$/",
+        "/^charts/baseline/values\\.yaml$/",
+        "/^kind/cluster\\.yaml$/"
+      ],
+      "matchStrings": [
+        "(?<depName>[a-z0-9][a-z0-9.\\-/]*[a-z0-9]):(?<currentValue>[a-zA-Z0-9][\\w.\\-]*)@(?<currentDigest>sha256:[a-f0-9]{64})"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Chart versions in scripts, each annotated with a # renovate: comment",
+      "managerFilePatterns": [
+        "/^scripts/.+\\.sh$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: registryUrl=(?<registryUrl>\\S+))?\\n\\s*[\\w_]+\\s*=\\s*\"?(?<currentValue>[^\"\\s]+)\"?"
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Our own image and repository, built by ci and promoted by pull request, have no upstream to follow",
+      "matchDepNames": [
+        "segp-api",
+        "git@github.com:tomasghilino/secure-eks-gitops-platform.git"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "A new major version is a decision, not a routine update: it waits for approval on the dependency dashboard",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Build and runtime node move together; the distroless runtime has no package list, so this is what keeps its node patched",
+      "matchDepNames": [
+        "node",
+        "gcr.io/distroless/nodejs24-debian13"
+      ],
+      "groupName": "node runtime"
+    },
+    {
+      "description": "The baseline allowlist must hold the same postgres digest as the api chart's setup job",
+      "matchDepNames": [
+        "postgres"
+      ],
+      "groupName": "postgres image",
+      "prBodyNotes": [
+        "The baseline chart's `allowedImages` must keep the same digest as the api chart's `database.setup.image`; this pull request changes both."
+      ]
+    },
+    {
+      "description": "Upstream charts whose values files pin image digests by hand, after a signature check",
+      "matchDepNames": [
+        "argo-cd",
+        "kyverno",
+        "external-secrets",
+        "kube-prometheus-stack",
+        "loki",
+        "tempo",
+        "opentelemetry-collector"
+      ],
+      "matchDatasources": [
+        "helm"
+      ],
+      "prBodyNotes": [
+        "This chart's values file pins its images by digest. Before merging, move those digests to the images of the new chart version and verify their signatures with cosign; otherwise the old images keep running."
+      ]
+    }
+  ]
+}
