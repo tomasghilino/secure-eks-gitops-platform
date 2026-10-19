@@ -1,3 +1,8 @@
+{{- /* the api image as git names it (segp-api:<commit>@sha256:<digest>), with or without an ecr registry */ -}}
+{{- define "baseline.apiImagePattern" -}}
+^([0-9]{12}[.]dkr[.]ecr[.]us-east-1[.]amazonaws[.]com/)?segp-api:[0-9a-f]{40}@sha256:[0-9a-f]{64}$
+{{- end }}
+
 {{- define "baseline.podPolicySpec" -}}
 validationActions:
   - {{ .Values.kyverno.action }}
@@ -6,8 +11,7 @@ matchConstraints:
     - apiGroups: [""]
       apiVersions: [v1]
       operations: [CREATE, UPDATE]
-      # kubectl debug adds containers to a running pod through this subresource, not through a pod update
-      resources: [pods, pods/ephemeralcontainers]
+      resources: [pods]
 # also check the Deployments, StatefulSets and Jobs that create the pods, so the error shows up there
 autogen:
   podControllers:
@@ -15,7 +19,4 @@ autogen:
 variables:
   - name: containers
     expression: "object.spec.containers + object.spec.?initContainers.orValue([])"
-  # debug containers can't set resources, so only the image rules look at them
-  - name: allContainers
-    expression: "variables.containers + object.spec.?ephemeralContainers.orValue([])"
 {{- end }}

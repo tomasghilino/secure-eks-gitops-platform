@@ -5,7 +5,7 @@ metadata:
 spec:
   {{- include "baseline.podPolicySpec" . | nindent 2 }}
   validations:
-    - expression: "variables.allContainers.all(c, image(c.image).containsDigest() || !(image(c.image).tag() in ['', 'latest']))"
+    - expression: "variables.containers.all(c, image(c.image).containsDigest() || !(image(c.image).tag() in ['', 'latest']))"
       message: every image needs a fixed tag or a digest, never latest or no tag
 ---
 apiVersion: policies.kyverno.io/v1
@@ -38,6 +38,31 @@ spec:
   {{- include "baseline.podPolicySpec" . | nindent 2 }}
   validations:
     - expression: >-
-        variables.allContainers.all(c, c.image in {{ toJson .Values.allowedImages }} ||
-        c.image.matches('^([0-9]{12}[.]dkr[.]ecr[.]us-east-1[.]amazonaws[.]com/)?segp-api:[0-9a-f]{40}@sha256:[0-9a-f]{64}$'))
+        variables.containers.all(c, c.image in {{ toJson .Values.allowedImages }} ||
+        c.image.matches('{{ include "baseline.apiImagePattern" . }}'))
       message: only the api image pinned to a commit and a digest, or an image listed in the baseline values, may run here
+---
+# kubectl debug adds containers to a running pod through the ephemeralcontainers subresource, which the pod rules
+# above never see; debug containers get the same image rule (they can't set resources, so no memory rule).
+# a policy of its own, because a policy that matches a subresource gets no autogen rules for deployments and jobs
+apiVersion: policies.kyverno.io/v1
+kind: NamespacedValidatingPolicy
+metadata:
+  name: restrict-debug-container-images
+spec:
+  validationActions:
+    - {{ .Values.kyverno.action }}
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [UPDATE]
+        resources: [pods/ephemeralcontainers]
+  autogen:
+    podControllers:
+      controllers: []
+  validations:
+    - expression: >-
+        object.spec.?ephemeralContainers.orValue([]).all(c, c.image in {{ toJson .Values.allowedImages }} ||
+        c.image.matches('{{ include "baseline.apiImagePattern" . }}'))
+      message: debug containers may only use the api image pinned to a commit and a digest, or an image listed in the baseline values
