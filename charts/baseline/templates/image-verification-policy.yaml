@@ -17,7 +17,8 @@ spec:
       - apiGroups: [""]
         apiVersions: [v1]
         operations: [CREATE, UPDATE]
-        resources: [pods]
+        # kubectl debug adds containers through this subresource
+        resources: [pods, pods/ephemeralcontainers]
   # pods only: deployments name the image without its registry, which use-ecr-registry adds to each pod
   autogen:
     podControllers:
@@ -39,7 +40,7 @@ spec:
   variables:
     - name: apiImages
       expression: >-
-        (images.containers + images.?initContainers.orValue([])).filter(i, i.contains('.dkr.ecr.') && i.contains('/segp-api'))
+        (images.containers + images.?initContainers.orValue([]) + images.?ephemeralContainers.orValue([])).filter(i, i.contains('.dkr.ecr.') && i.contains('/segp-api'))
   attestors:
     - name: ci
       cosign:

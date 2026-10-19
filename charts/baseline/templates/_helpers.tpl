@@ -6,7 +6,8 @@ matchConstraints:
     - apiGroups: [""]
       apiVersions: [v1]
       operations: [CREATE, UPDATE]
-      resources: [pods]
+      # kubectl debug adds containers to a running pod through this subresource, not through a pod update
+      resources: [pods, pods/ephemeralcontainers]
 # also check the Deployments, StatefulSets and Jobs that create the pods, so the error shows up there
 autogen:
   podControllers:
@@ -14,4 +15,7 @@ autogen:
 variables:
   - name: containers
     expression: "object.spec.containers + object.spec.?initContainers.orValue([])"
+  # debug containers can't set resources, so only the image rules look at them
+  - name: allContainers
+    expression: "variables.containers + object.spec.?ephemeralContainers.orValue([])"
 {{- end }}
