@@ -368,6 +368,15 @@ jobs:
               -v "$HOME/.docker:/docker:ro" -e DOCKER_CONFIG=/docker \
               "$COSIGN_IMAGE" "$@" --key cosign.pub --insecure-ignore-tlog=true "$IMAGE_REF" > /dev/null
           }
-          cosign verify
-          cosign verify-attestation --type cyclonedx
-          cosign verify-attestation --type slsaprovenance1
+          # ecr lists a new referrer a few seconds after the push, so a check right after attesting can miss it
+          verify() {
+            for attempt in 1 2 3; do
+              cosign "$@" && return 0
+              echo "attempt $attempt failed, ecr may not list the new referrer yet"
+              sleep 10
+            done
+            return 1
+          }
+          verify verify
+          verify verify-attestation --type cyclonedx
+          verify verify-attestation --type slsaprovenance1
