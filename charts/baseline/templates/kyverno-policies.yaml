@@ -61,6 +61,10 @@ spec:
   autogen:
     podControllers:
       controllers: []
+  # checked when a debug container is added; a subresource can't be listed for background reports
+  evaluation:
+    background:
+      enabled: false
   validations:
     - expression: >-
         object.spec.?ephemeralContainers.orValue([]).all(c, c.image in {{ toJson .Values.allowedImages }} ||
