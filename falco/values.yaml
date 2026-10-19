@@ -1,0 +1,47 @@
+# runtime threat detection: one falco per node watches the system calls of every container through the
+# modern ebpf probe and reports matches of its rules (a shell in a container, a read of /etc/shadow, a search
+# for aws credentials...) as json lines, which the opentelemetry collector ships to loki, and as metrics
+image:
+  # digest pinned after cosign verified it was signed by falcosecurity/falco's reusable_publish_docker.yaml
+  # workflow at tag 0.45.0; the chart has no digest field, so it goes after the tag
+  tag: 0.45.0@sha256:788f1129c542171813083d4afc61b16730a47dde8c23d9c39370acef996349b6
+
+driver:
+  kind: modern_ebpf
+  modernEbpf:
+    # four capabilities (BPF, PERFMON, SYS_RESOURCE, SYS_PTRACE) instead of a privileged container
+    leastPrivileged: true
+
+# the image already ships the default rules and the container plugin; falcoctl would download them again at
+# startup from a registry, unpinned and unverified, and keep following new versions
+falcoctl:
+  artifact:
+    install:
+      enabled: false
+    follow:
+      enabled: false
+
+falco:
+  # one json object per alert, so loki can filter on rule, priority and container fields
+  json_output: true
+  json_include_output_property: true
+  webserver:
+    prometheus_metrics_enabled: true
+
+# falcosecurity_falco_rules_matches_total counts matches per rule; the alert rules in falco/manifests read it
+metrics:
+  enabled: true
+  interval: 1m
+
+serviceMonitor:
+  create: true
+  # prometheus only picks up ServiceMonitors with this label
+  labels:
+    release: kube-prometheus-stack
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi

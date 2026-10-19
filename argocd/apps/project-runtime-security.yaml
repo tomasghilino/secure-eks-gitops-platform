@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: runtime-security
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  description: Falco, which needs host access on every node, kept apart from the workloads it watches
+  sourceRepos:
+    - git@github.com:tomasghilino/secure-eks-gitops-platform.git
+    - https://falcosecurity.github.io/charts
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: falco
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  # only what the falco chart and its alert rules create
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: apps
+      kind: DaemonSet
+    - group: monitoring.coreos.com
+      kind: ServiceMonitor
+    - group: monitoring.coreos.com
+      kind: PrometheusRule

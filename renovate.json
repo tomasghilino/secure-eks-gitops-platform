@@ -86,7 +86,8 @@
         "kube-prometheus-stack",
         "loki",
         "tempo",
-        "opentelemetry-collector"
+        "opentelemetry-collector",
+        "falco"
       ],
       "matchDatasources": [
         "helm"
