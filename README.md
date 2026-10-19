@@ -2,6 +2,8 @@
 
 A Kubernetes platform on AWS that runs a small NestJS API in two EKS clusters, staging and production, and only lets in images it can trace back to its own CI. GitHub Actions tests and scans every commit, then pushes the image to ECR and signs it, along with its SBOM and provenance, using a KMS key. Argo CD deploys from Git, production only changes through a pull request, and Kyverno checks the signature again before any pod starts. The infrastructure is Terraform, and every check below was triggered on purpose at least once.
 
+![Architecture overview: GitHub Actions pushes images to ECR and signs them with a KMS key; in each environment's VPC, Argo CD pulls from GitHub, Kyverno verifies the signature in ECR, External Secrets reads Secrets Manager and the cluster reaches RDS over TLS](docs/images/architecture-overview.jpg)
+
 ## Stack
 
 - API: NestJS on Node.js 24 with PostgreSQL 17, instrumented with OpenTelemetry
