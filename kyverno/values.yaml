@@ -1,6 +1,13 @@
 # installed by scripts/eks-up.sh, which pins the chart version
 # every digest was checked with cosign: signed by the kyverno/kyverno release workflow at tag v1.19.1
 admissionController:
+  # the policies fail closed, so with one replica a node loss (or a spot interruption) blocks every new pod in
+  # staging and production until kyverno is back; three replicas spread over the nodes, and the budget keeps
+  # one running while a node is drained
+  replicas: 3
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
   initContainer:
     image:
       tag: v1.19.1@sha256:c25c47461f06f2845a48c319ae86fbbc1730a7b9ed5b701889c9dc1f9ee94b09
