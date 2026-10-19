@@ -45,3 +45,27 @@ resources:
     memory: 256Mi
   limits:
     memory: 1Gi
+
+# tuning: the default rules know nothing about this cluster. right after install, "Contact K8S API Server From
+# Container" had fired 54 times, all from argo cd, kyverno and the monitoring stack, which talk to the api by
+# design. those namespaces are excluded; in the environment namespaces the same connection becomes a warning,
+# because the api runs without a service account token and has no reason to reach the kubernetes api
+customRules:
+  segp-tuning.yaml: |-
+    - macro: user_known_contact_k8s_api_server_activities
+      condition: (k8s.ns.name in (argocd, kyverno, external-secrets, monitoring, monitoring-agents))
+      override:
+        condition: replace
+
+    - rule: Environment pod contacts the Kubernetes API
+      desc: >
+        A container in the staging or production namespace opened a connection to the Kubernetes API. The api
+        pods have no service account token, so this is someone exploring the cluster from inside a pod.
+      condition: >
+        evt.type=connect and (fd.typechar=4 or fd.typechar=6) and container and k8s_api_server
+        and k8s.ns.name in (staging, production)
+      output: >
+        A pod in an environment namespace connected to the Kubernetes API (namespace=%k8s.ns.name
+        pod=%k8s.pod.name command=%proc.cmdline connection=%fd.name image=%container.image.repository)
+      priority: WARNING
+      tags: [container, network, k8s, mitre_discovery]
