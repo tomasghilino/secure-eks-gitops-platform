@@ -154,7 +154,7 @@ jobs:
       # none of these publish signatures, so they are pinned by digest
       TERRAFORM_IMAGE: hashicorp/terraform:1.16.5@sha256:c7926feace05d0f7e73542842bf3945924e955a1f782cf000ccbb8d18fa42d77
       TFLINT_IMAGE: ghcr.io/terraform-linters/tflint:v0.64.0@sha256:1c595f42d794c32c45a6ea8b58655fd66433d4ca3b1bc631c574a48d120bd19f
-      CHECKOV_IMAGE: bridgecrew/checkov:3.3.28@sha256:19ab1e9a08bf76f78391ca6fa46bb62fd08737e4e66466b16a82aa2d1337e153
+      CHECKOV_IMAGE: bridgecrew/checkov:3.3.29@sha256:3cc125b5337717b7303dbddd4e79374c120687b5ff6a24f9abdad56b562469f3
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
